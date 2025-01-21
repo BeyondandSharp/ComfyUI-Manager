@@ -2,9 +2,17 @@ import os
 from urllib.parse import urlparse
 import urllib
 import sys
+import shutil
 
 aria2 = os.getenv('COMFYUI_MANAGER_ARIA2_SERVER')
 HF_ENDPOINT = os.getenv('HF_ENDPOINT')
+dir_remote = os.getenv('COMFYUI_MANAGER_DIR_REMOTE')
+dir_net = os.getenv('COMFYUI_MANAGER_DIR_NET')
+#model_dir_remote = os.path.join(dir_remote, "models")
+#model_dir_net = os.path.join(dir_net, "models")
+print(f"aria2: {aria2}")
+print(f"dir_remote: {dir_remote}")
+print(f"dir_net: {dir_net}")
 
 if aria2 is not None:
     secret = os.getenv('COMFYUI_MANAGER_ARIA2_SECRET')
@@ -45,7 +53,7 @@ def download_url(model_url: str, model_dir: str, filename: str):
     if HF_ENDPOINT:
         model_url = model_url.replace('https://huggingface.co', HF_ENDPOINT)
     if aria2:
-        return aria2_download_url(model_url, model_dir, filename)
+        return aria2_download_url(model_url, dir_remote, dir_net, model_dir, filename)
     else:
         from torchvision.datasets.utils import download_url as torchvision_download_url
         return torchvision_download_url(model_url, model_dir, filename)
@@ -64,7 +72,7 @@ def aria2_find_task(dir: str, filename: str):
                 return download
 
 
-def aria2_download_url(model_url: str, model_dir: str, filename: str):
+def aria2_download_url(model_url: str, dir_remote: str, dir_net: str, model_dir: str, filename: str):
     import manager_core as core
     import tqdm
     import time
@@ -73,10 +81,13 @@ def aria2_download_url(model_url: str, model_dir: str, filename: str):
         model_dir = model_dir[len(core.comfy_path) :]
 
     download_dir = model_dir if model_dir.startswith('/') else os.path.join('/models', model_dir)
+    print(f"download_dir: {download_dir}")
+    download_dir_remote = os.path.join(dir_remote, download_dir[1:])
+    print(f"download_dir_remote: {download_dir_remote}")
 
-    download = aria2_find_task(download_dir, filename)
+    download = aria2_find_task(download_dir_remote, filename)
     if download is None:
-        options = {'dir': download_dir, 'out': filename}
+        options = {'dir': download_dir_remote, 'out': filename}
         download = aria2.add(model_url, options)[0]
 
     if download.is_active:
@@ -93,6 +104,14 @@ def aria2_download_url(model_url: str, model_dir: str, filename: str):
                 progress_bar.update(download.completed_length - progress_bar.n)
                 time.sleep(1)
                 download.update()
+
+    if download.is_complete:
+        download_dir_net = os.path.join(dir_net, download_dir[1:])
+        print(f"download_dir_net: {download_dir_net}")
+        if not os.path.exists(download_dir):
+            os.makedirs(download_dir)
+        shutil.copy2(os.path.join(download_dir_net, filename), os.path.join(download_dir[1:], filename))
+
 
 
 def download_url_with_agent(url, save_path):
