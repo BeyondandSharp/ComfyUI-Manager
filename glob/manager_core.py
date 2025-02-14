@@ -832,10 +832,10 @@ class UnifiedManager:
 
         return True
 
-    def reserve_cnr_switch(self, target, zip_url, from_path, to_path, no_deps):
+    def reserve_cnr_switch(self, target, zip_url, from_path, to_path, no_deps, version_spec=None):
         script_path = os.path.join(manager_startup_script_path, "install-scripts.txt")
         with open(script_path, "a") as file:
-            obj = [target, "#LAZY-CNR-SWITCH-SCRIPT", zip_url, from_path, to_path, no_deps, get_default_custom_nodes_path(), sys.executable]
+            obj = [target, "#LAZY-CNR-SWITCH-SCRIPT", zip_url, from_path, to_path, no_deps, get_default_custom_nodes_path(), sys.executable, version_spec]
             file.write(f"{obj}\n")
 
         print(f"Installation reserved: {target}")
@@ -897,7 +897,7 @@ class UnifiedManager:
         to_path = os.path.join(get_default_custom_nodes_path(), target)
 
         def postinstall():
-            return self.reserve_cnr_switch(target, zip_url, from_path, to_path, no_deps)
+            return self.reserve_cnr_switch(target, zip_url, from_path, to_path, no_deps, version_spec)
 
         if return_postinstall:
             return result.with_postinstall(postinstall)
@@ -924,9 +924,9 @@ class UnifiedManager:
         if self.active_nodes[node_id][0] == version_spec:
             return ManagedResult('skip').with_msg("Up to date")
 
-        archive_name = f"CNR_temp_{str(uuid.uuid4())}.zip"  # should be unpredictable name - security precaution
+        archive_name = node_id + "_" + version_spec + ".zip"
         download_path = os.path.join(get_default_custom_nodes_path(), archive_name)
-        manager_downloader.basic_download_url(node_info.download_url, get_default_custom_nodes_path(), archive_name)
+        manager_downloader.download_url(node_info.download_url, get_default_custom_nodes_path(), archive_name)
 
         # 2. extract files into <node_id>
         install_path = self.active_nodes[node_id][1]
@@ -1177,7 +1177,7 @@ class UnifiedManager:
         if node_info is None or not node_info.download_url:
             return result.fail(f'not available node: {node_id}@{version_spec}')
 
-        archive_name = f"CNR_temp_{str(uuid.uuid4())}.zip"  # should be unpredictable name - security precaution
+        archive_name = node_id + "_" + version_spec + ".zip"
         download_path = os.path.join(get_default_custom_nodes_path(), archive_name)
 
         # re-download. I cannot trust existing file.

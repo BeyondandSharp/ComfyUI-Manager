@@ -621,12 +621,19 @@ def execute_lazy_install_script(repo_path, executable):
         process_wrap(install_cmd, repo_path, env=new_env)
 
 
-def execute_lazy_cnr_switch(target, zip_url, from_path, to_path, no_deps, custom_nodes_path):
+def execute_lazy_cnr_switch(target, zip_url, from_path, to_path, no_deps, custom_nodes_path, version_spec):
     import uuid
     import shutil
 
+    print(f"target: '{target}'")
+    print(f"zip_url: '{zip_url}'")
+    print(f"from_path: '{from_path}'")
+    print(f"to_path: '{to_path}'")
+    print(f"no_deps: '{no_deps}'")
+    print(f"custom_nodes_path: '{custom_nodes_path}'")
+
     # 1. download
-    archive_name = f"CNR_temp_{str(uuid.uuid4())}.zip"  # should be unpredictable name - security precaution
+    archive_name = target + "_" + version_spec + ".zip"
     download_path = os.path.join(custom_nodes_path, archive_name)
     manager_downloader.download_url(zip_url, custom_nodes_path, archive_name)
 
@@ -702,7 +709,7 @@ if os.path.exists(script_list_path):
                         execute_lazy_install_script(script[0], script[2])
 
                     elif script[1] == "#LAZY-CNR-SWITCH-SCRIPT":
-                        execute_lazy_cnr_switch(script[0], script[2], script[3], script[4], script[5], script[6])
+                        execute_lazy_cnr_switch(script[0], script[2], script[3], script[4], script[5], script[6], script[8])
                         execute_lazy_install_script(script[3], script[7])
 
                     elif script[1] == "#LAZY-MIGRATION":

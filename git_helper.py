@@ -70,8 +70,31 @@ def gitclone(custom_nodes_path, url, target_hash=None, repo_path=None):
     if repo_path is None:
         repo_path = os.path.join(custom_nodes_path, repo_name)
 
-    # Clone the repository from the remote URL
-    repo = git.Repo.clone_from(url, repo_path, recursive=True, progress=GitProgress())
+    # 如果url开头是https://github.com或http://github.com，则使用代理
+    if url.startswith('https://github.com') or url.startswith('http://github.com'):
+        gitcache_http_proxy = os.environ.get('GITCACHE_HTTP_PROXY')
+        print(f"gitcache_proxy: {gitcache_http_proxy}")
+        # url的https转换为http
+        if url.startswith('https://'):
+            url = url.replace('https://', 'http://')
+        print(f"url: {url}")
+        # Clone the repository from the remote URL
+        repo = git.Repo.clone_from(
+            url,
+            repo_path,
+            recursive=True,
+            progress=GitProgress(),
+            allow_unsafe_options=True,
+            multi_options=[f"--config http.proxy={gitcache_http_proxy}"]
+        )
+    else:
+        # Clone the repository from the remote URL
+        repo = git.Repo.clone_from(
+            url,
+            repo_path,
+            recursive=True,
+            progress=GitProgress()
+        )
 
     if target_hash is not None:
         print(f"CHECKOUT: {repo_name} [{target_hash}]")
