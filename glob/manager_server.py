@@ -55,8 +55,14 @@ def handle_stream(stream, prefix):
 from comfy.cli_args import args
 import latent_preview
 
+def is_loopback(address):
+    import ipaddress
+    try:
+        return ipaddress.ip_address(address).is_loopback
+    except ValueError:
+        return False
 
-is_local_mode = args.listen.startswith('127.') or args.listen.startswith('local.')
+is_local_mode = is_loopback(args.listen)
 
 
 model_dir_name_map = {
@@ -85,11 +91,11 @@ def is_allowed_security_level(level):
         return False
     elif level == 'high':
         if is_local_mode:
-            return core.get_config()['security_level'].lower() in ['weak', 'normal-']
+            return core.get_config()['security_level'] in ['weak', 'normal-']
         else:
-            return core.get_config()['security_level'].lower() == 'weak'
+            return core.get_config()['security_level'] == 'weak'
     elif level == 'middle':
-        return core.get_config()['security_level'].lower() in ['weak', 'normal', 'normal-']
+        return core.get_config()['security_level'] in ['weak', 'normal', 'normal-']
     else:
         return True
 
@@ -410,22 +416,60 @@ async def task_worker():
             traceback.print_exc()
             return f"Installation failed:\n{node_spec_str}"
 
-    async def do_update(item) -> str:
+    async def do_update(item):
         ui_id, node_name, node_ver = item
 
         try:
             res = core.unified_manager.unified_update(node_name, node_ver)
 
+            if res.ver == 'unknown':
+                url = core.unified_manager.unknown_active_nodes[node_name][0]
+                title = os.path.basename(url)
+            else:
+                url = core.unified_manager.cnr_map[node_name].get('repository')
+                title = core.unified_manager.cnr_map[node_name]['name']
+
             manager_util.clear_pip_cache()
 
-            if res.result:
-                return 'success'
+            if url is not None:
+                base_res = {'url': url, 'title': title}
+            else:
+                base_res = {'title': title}
 
+            if res.result:
+                if res.action == 'skip':
+                    base_res['msg'] = 'skip'
+                    return base_res
+                else:
+                    base_res['msg'] = 'success'
+                    return base_res
+
+            base_res['msg'] = f"An error occurred while updating '{node_name}'."
             logging.error(f"\nERROR: An error occurred while updating '{node_name}'.")
+            return base_res
         except Exception:
             traceback.print_exc()
 
-        return f"An error occurred while updating '{node_name}'."
+        return {'msg':f"An error occurred while updating '{node_name}'."}
+
+    async def do_update_comfyui() -> str:
+        try:
+            repo_path = os.path.dirname(folder_paths.__file__)
+            res = core.update_path(repo_path)
+
+            if res == "fail":
+                logging.error("ComfyUI update fail: The installed ComfyUI does not have a Git repository.")
+                return "The installed ComfyUI does not have a Git repository."
+            elif res == "updated":
+                logging.info("ComfyUI is updated.")
+                return "success"
+            else:  # skipped
+                logging.info("ComfyUI is up-to-date.")
+                return "skip"
+        except Exception:
+            traceback.print_exc()
+
+        return "An error occurred while updating 'comfyui'."
 
     async def do_fix(item) -> str:
         ui_id, node_name, node_ver = item
@@ -550,6 +594,10 @@ async def task_worker():
                 msg = await do_install_model(item)
             elif kind == 'update':
                 msg = await do_update(item)
+            elif kind == 'update-main':
+                msg = await do_update(item)
+            elif kind == 'update-comfyui':
+                msg = await do_update_comfyui()
             elif kind == 'fix':
                 msg = await do_fix(item)
             elif kind == 'uninstall':
@@ -569,6 +617,15 @@ async def task_worker():
             if kind == 'install-model':
                 model_result[ui_id] = msg
                 ui_target = "model_manager"
+            elif kind == 'update-main':
+                nodepack_result[ui_id] = msg
+                ui_target = "main"
+            elif kind == 'update-comfyui':
+                nodepack_result['comfyui'] = msg
+                ui_target = "main"
+            elif kind == 'update':
+                nodepack_result[ui_id] = msg['msg']
+                ui_target = "nodepack_manager"
             else:
                 nodepack_result[ui_id] = msg
                 ui_target = "nodepack_manager"
@@ -643,49 +700,46 @@ async def fetch_updates(request):
         return web.Response(status=400)
 
 
-@routes.get("/customnode/update_all")
+@routes.get("/manager/queue/update_all")
 async def update_all(request):
     if not is_allowed_security_level('middle'):
         logging.error(SECURITY_MESSAGE_MIDDLE_OR_BELOW)
         return web.Response(status=403)
 
-    try:
-        await core.save_snapshot_with_postfix('autosave')
+    with task_worker_lock:
+        is_processing = task_worker_thread is not None and task_worker_thread.is_alive()
+        if is_processing:
+            return web.Response(status=401)
+        
+    await core.save_snapshot_with_postfix('autosave')
 
-        if request.rel_url.query["mode"] == "local":
-            channel = 'local'
-        else:
-            channel = core.get_config()['channel_url']
+    if request.rel_url.query["mode"] == "local":
+        channel = 'local'
+    else:
+        channel = core.get_config()['channel_url']
 
-        await core.unified_manager.reload(request.rel_url.query["mode"])
-        await core.unified_manager.get_custom_nodes(channel, request.rel_url.query["mode"])
+    await core.unified_manager.reload(request.rel_url.query["mode"])
+    await core.unified_manager.get_custom_nodes(channel, request.rel_url.query["mode"])
 
-        updated_cnr = []
-        for k, v in core.unified_manager.active_nodes.items():
-            if v[0] != 'nightly':
-                res = core.unified_manager.unified_update(k, v[0])
-                if res.action == 'switch-cnr' and res:
-                    updated_cnr.append(k)
+    for k, v in core.unified_manager.active_nodes.items():
+        if k == 'comfyui-manager':
+            # skip updating comfyui-manager if desktop version
+            if os.environ.get('__COMFYUI_DESKTOP_VERSION__'):
+                continue
 
-        res = core.unified_manager.fetch_or_pull_git_repo(is_pull=True)
+        update_item = k, k, v[0]
+        task_queue.put(("update-main", update_item))
 
-        res['updated'] += updated_cnr
+    for k, v in core.unified_manager.unknown_active_nodes.items():
+        if k == 'comfyui-manager':
+            # skip updating comfyui-manager if desktop version
+            if os.environ.get('__COMFYUI_DESKTOP_VERSION__'):
+                continue
 
-        for x in res['failed']:
-            logging.error(f"PULL FAILED: {x}")
+        update_item = k, k, 'unknown'
+        task_queue.put(("update-main", update_item))
 
-        if len(res['updated']) == 0 and len(res['failed']) == 0:
-            status = 200
-        else:
-            status = 201
-
-        logging.info("\nDone.")
-        return web.json_response(res, status=status, content_type='application/json')
-    except:
-        traceback.print_exc()
-        return web.Response(status=400)
-    finally:
-        manager_util.clear_pip_cache()
+    return web.Response(status=200)
 
 
 def convert_markdown_to_html(input_text):
@@ -1281,26 +1335,10 @@ async def update_custom_node(request):
     return web.Response(status=200)
 
 
-@routes.get("/comfyui_manager/update_comfyui")
+@routes.get("/manager/queue/update_comfyui")
 async def update_comfyui(request):
-    logging.info("Update ComfyUI")
-
-    try:
-        repo_path = os.path.dirname(folder_paths.__file__)
-        res = core.update_path(repo_path)
-        if res == "fail":
-            logging.error("ComfyUI update fail: The installed ComfyUI does not have a Git repository.")
-            return web.Response(status=400)
-        elif res == "updated":
-            logging.info("ComfyUI is updated.")
-            return web.Response(status=201)
-        else:  # skipped
-            logging.info("ComfyUI is up-to-date.")
-            return web.Response(status=200)
-    except Exception as e:
-        logging.error(f"ComfyUI update fail: {e}", file=sys.stderr)
-
-    return web.Response(status=400)
+    task_queue.put(("update-comfyui", ('comfyui',)))
+    return web.Response(status=200)
 
 
 @routes.get("/comfyui_manager/comfyui_versions")

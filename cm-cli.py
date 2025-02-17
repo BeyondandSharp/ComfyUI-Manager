@@ -32,6 +32,7 @@ if comfy_path is None:
         print("\n[bold yellow]WARN: The `COMFYUI_PATH` environment variable is not set. Assuming `custom_nodes/ComfyUI-Manager/../../` as the ComfyUI path.[/bold yellow]", file=sys.stderr)
         comfy_path = os.path.abspath(os.path.join(manager_util.comfyui_manager_path, '..', '..'))
 
+# This should be placed here
 sys.path.append(comfy_path)
 
 import utils.extra_config
@@ -42,13 +43,21 @@ import cnr_utils
 
 comfyui_manager_path = os.path.abspath(os.path.dirname(__file__))
 
-cm_global.pip_blacklist = ['torch', 'torchsde', 'torchvision']
+cm_global.pip_blacklist = {'torch', 'torchsde', 'torchvision'}
 cm_global.pip_downgrade_blacklist = ['torch', 'torchsde', 'torchvision', 'transformers', 'safetensors', 'kornia']
 cm_global.pip_overrides = {'numpy': 'numpy<2'}
 
 if os.path.exists(os.path.join(manager_util.comfyui_manager_path, "pip_overrides.json")):
     with open(os.path.join(manager_util.comfyui_manager_path, "pip_overrides.json"), 'r', encoding="UTF-8", errors="ignore") as json_file:
         cm_global.pip_overrides = json.load(json_file)
+
+
+if os.path.exists(os.path.join(manager_util.comfyui_manager_path, "pip_blacklist.list")):
+    with open(os.path.join(manager_util.comfyui_manager_path, "pip_blacklist.list"), 'r', encoding="UTF-8", errors="ignore") as f:
+        for x in f.readlines():
+            y = x.strip()
+            if y != '':
+                cm_global.pip_blacklist.add(y)
 
 
 def check_comfyui_hash():
@@ -135,6 +144,13 @@ class Ctx:
             with open(core.manager_pip_overrides_path, 'r', encoding="UTF-8", errors="ignore") as json_file:
                 cm_global.pip_overrides = json.load(json_file)
                 cm_global.pip_overrides = {'numpy': 'numpy<2'}
+
+        if os.path.exists(core.manager_pip_blacklist_path):
+            with open(core.manager_pip_blacklist_path, 'r', encoding="UTF-8", errors="ignore") as f:
+                for x in f.readlines():
+                    y = x.strip()
+                    if y != '':
+                        cm_global.pip_blacklist.add(y)
 
     @staticmethod
     def get_startup_scripts_path():
@@ -1012,17 +1028,32 @@ def save_snapshot(
         user_directory: str = typer.Option(
             None,
             help="user directory"
-        )
+        ),
+        full_snapshot: Annotated[
+            bool,
+            typer.Option(
+                show_default=False, help="If the snapshot should include custom node, ComfyUI version and pip versions (default), or only custom node details"
+            ),
+        ] = True,
 ):
     cmd_ctx.set_user_directory(user_directory)
 
-    path = asyncio.run(core.save_snapshot_with_postfix('snapshot', output))
+    if(not output.endswith('.json') and not output.endswith('.yaml')):
+        print("ERROR: output path should be either '.json' or '.yaml' file.")
+        raise typer.Exit(code=1)
+    
+    dir_path = os.path.dirname(output)
+    if(dir_path != '' and not os.path.exists(dir_path)):
+        print(f"ERROR: {output} path not exists.")
+        raise typer.Exit(code=1)
+        
+    path = asyncio.run(core.save_snapshot_with_postfix('snapshot', output, not full_snapshot))
     print(f"Current snapshot is saved as `{path}`")
 
 
 @app.command("restore-snapshot", help="Restore snapshot from snapshot file")
 def restore_snapshot(
-        snapshot_name: str,
+        snapshot_name: str, 
         pip_non_url: Optional[bool] = typer.Option(
             default=None,
             show_default=False,

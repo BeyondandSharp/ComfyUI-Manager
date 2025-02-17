@@ -42,7 +42,7 @@ import manager_downloader
 from node_package import InstalledNodePackage
 
 
-version_code = [3, 19, 1]
+version_code = [3, 23]
 version_str = f"V{version_code[0]}.{version_code[1]}" + (f'.{version_code[2]}' if len(version_code) > 2 else '')
 
 
@@ -177,6 +177,7 @@ manager_channel_list_path = None
 manager_startup_script_path:str = None
 manager_snapshot_path = None
 manager_pip_overrides_path = None
+manager_pip_blacklist_path = None
 manager_components_path = None
 
 def update_user_directory(user_dir):
@@ -186,6 +187,7 @@ def update_user_directory(user_dir):
     global manager_startup_script_path
     global manager_snapshot_path
     global manager_pip_overrides_path
+    global manager_pip_blacklist_path
     global manager_components_path
 
     manager_files_path = os.path.abspath(os.path.join(user_dir, 'default', 'ComfyUI-Manager'))
@@ -203,6 +205,7 @@ def update_user_directory(user_dir):
     manager_config_path = os.path.join(manager_files_path, 'config.ini')
     manager_channel_list_path = os.path.join(manager_files_path, 'channels.list')
     manager_pip_overrides_path = os.path.join(manager_files_path, "pip_overrides.json")
+    manager_pip_blacklist_path = os.path.join(manager_files_path, "pip_blacklist.list")
     manager_components_path = os.path.join(manager_files_path, "components")
     manager_util.cache_dir = os.path.join(manager_files_path, "cache")
 
@@ -345,6 +348,7 @@ class ManagedResult:
         self.msg = None
         self.target = None
         self.postinstall = lambda: True
+        self.ver = None
 
     def append(self, item):
         self.items.append(item)
@@ -364,6 +368,10 @@ class ManagedResult:
 
     def with_postinstall(self, postinstall):
         self.postinstall = postinstall
+        return self
+
+    def with_ver(self, ver):
+        self.ver = ver
         return self
 
 
@@ -513,7 +521,10 @@ class UnifiedManager:
             if info:
                 cnr = self.cnr_map.get(info['id'])
                 if cnr:
-                    return {'id': cnr['id'], 'cnr': cnr, 'ver': info['version']}
+                    # normalize version
+                    # for example: 2.5 -> 2.5.0
+                    ver = str(manager_util.StrictVersion(info['version']))
+                    return {'id': cnr['id'], 'cnr': cnr, 'ver': ver}
                 else:
                     return None
             else:
@@ -786,6 +797,7 @@ class UnifiedManager:
                     node_id = v['id']
                 else:
                     node_id = v['files'][0].split('/')[-1]
+                    v['repository'] = v['files'][0]
                 res[node_id] = v
             elif len(v['files']) > 1:
                 res[v['files'][0]] = v  # A custom node composed of multiple url is treated as a single repository with one representative path
@@ -812,14 +824,14 @@ class UnifiedManager:
                 print("Install: pip packages")
                 pip_fixer = manager_util.PIPFixer(manager_util.get_installed_packages())
                 res = True
-                with open(requirements_path, "r") as requirements_file:
-                    for line in requirements_file:
-                        package_name = remap_pip_package(line.strip())
-                        if package_name and not package_name.startswith('#') and package_name not in self.processed_install:
-                            self.processed_install.add(package_name)
-                            install_cmd = manager_util.make_pip_cmd(["install", package_name])
-                            if package_name.strip() != "" and not package_name.startswith('#'):
-                                res = res and try_install_script(url, repo_path, install_cmd, instant_execution=instant_execution)
+                lines = manager_util.robust_readlines(requirements_path)
+                for line in lines:
+                    package_name = remap_pip_package(line.strip())
+                    if package_name and not package_name.startswith('#') and package_name not in self.processed_install:
+                        self.processed_install.add(package_name)
+                        install_cmd = manager_util.make_pip_cmd(["install", package_name])
+                        if package_name.strip() != "" and not package_name.startswith('#'):
+                            res = res and try_install_script(url, repo_path, install_cmd, instant_execution=instant_execution)
 
                 pip_fixer.fix_broken()
                 return res
@@ -1249,7 +1261,8 @@ class UnifiedManager:
                     return result.fail(f"Failed to execute install script: {url}")
 
         except Exception as e:
-            return result.fail(f"Install(git-clone) error: {url} / {e}")
+            traceback.print_exc()
+            return result.fail(f"Install(git-clone) error[2]: {url} / {e}")
 
         print("Installation was successful.")
         return result
@@ -1330,14 +1343,14 @@ class UnifiedManager:
             version_spec = self.resolve_unspecified_version(node_id, guess_mode='active')
 
         if version_spec is None:
-            return ManagedResult('update').fail(f'Update not available: {node_id}@{version_spec}')
+            return ManagedResult('update').fail(f'Update not available: {node_id}@{version_spec}').with_ver(version_spec)
 
         if version_spec == 'nightly':
-            return self.repo_update(self.active_nodes[node_id][1], instant_execution=instant_execution, no_deps=no_deps, return_postinstall=return_postinstall).with_target('nightly')
+            return self.repo_update(self.active_nodes[node_id][1], instant_execution=instant_execution, no_deps=no_deps, return_postinstall=return_postinstall).with_target('nightly').with_ver('nightly')
         elif version_spec == 'unknown':
-            return self.repo_update(self.unknown_active_nodes[node_id][1], instant_execution=instant_execution, no_deps=no_deps, return_postinstall=return_postinstall).with_target('unknown')
+            return self.repo_update(self.unknown_active_nodes[node_id][1], instant_execution=instant_execution, no_deps=no_deps, return_postinstall=return_postinstall).with_target('unknown').with_ver('unknown')
         else:
-            return self.cnr_switch_version(node_id, instant_execution=instant_execution, no_deps=no_deps, return_postinstall=return_postinstall)
+            return self.cnr_switch_version(node_id, instant_execution=instant_execution, no_deps=no_deps, return_postinstall=return_postinstall).with_ver('cnr')
 
     async def install_by_id(self, node_id, version_spec=None, channel=None, mode=None, instant_execution=False, no_deps=False, return_postinstall=False):
         """
@@ -1583,16 +1596,6 @@ def read_config():
         config = configparser.ConfigParser()
         config.read(manager_config_path)
         default_conf = config['default']
-
-        # policy migration: disable_unsecure_features -> security_level
-        if 'disable_unsecure_features' in default_conf:
-            if default_conf['disable_unsecure_features'].lower() == 'true':
-                security_level = 'strong'
-            else:
-                security_level = 'normal'
-        else:
-            security_level = default_conf['security_level'] if 'security_level' in default_conf else 'normal'
-
         manager_util.use_uv = default_conf['use_uv'].lower() == 'true' if 'use_uv' in default_conf else False
 
         def get_bool(key, default_value):
@@ -1600,26 +1603,25 @@ def read_config():
 
         return {
                     'http_channel_enabled': get_bool('http_channel_enabled', False),
-                    'preview_method': default_conf.get('preview_method', manager_funcs.get_current_preview_method()),
+                    'preview_method': default_conf.get('preview_method', manager_funcs.get_current_preview_method()).lower(),
                     'git_exe': default_conf.get('git_exe', ''),
                     'use_uv': get_bool('use_uv', False),
                     'channel_url': default_conf.get('channel_url', DEFAULT_CHANNEL),
                     'default_cache_as_channel_url': get_bool('default_cache_as_channel_url', False),
-                    'share_option': default_conf.get('share_option', 'all'),
+                    'share_option': default_conf.get('share_option', 'all').lower(),
                     'bypass_ssl': get_bool('bypass_ssl', False),
                     'file_logging': get_bool('file_logging', True),
-                    'component_policy': default_conf.get('component_policy', 'workflow'),
+                    'component_policy': default_conf.get('component_policy', 'workflow').lower(),
                     'windows_selector_event_loop_policy': get_bool('windows_selector_event_loop_policy', False),
                     'model_download_by_agent': get_bool('model_download_by_agent', False),
-                    'downgrade_blacklist': default_conf.get('downgrade_blacklist', ''),
+                    'downgrade_blacklist': default_conf.get('downgrade_blacklist', '').lower(),
                     'skip_migration_check': get_bool('skip_migration_check', False),
                     'always_lazy_install': get_bool('always_lazy_install', False),
-                    'network_mode': default_conf.get('network_mode', 'public'),
-                    'security_level': security_level,
+                    'network_mode': default_conf.get('network_mode', 'public').lower(),
+                    'security_level': default_conf.get('security_level', 'normal').lower(),
                }
 
     except Exception:
-        traceback.print_exc()
         manager_util.use_uv = False
         return {
             'http_channel_enabled': False,
@@ -2056,8 +2058,8 @@ async def gitclone_install(url, instant_execution=False, msg_prefix='', no_deps=
 
     except Exception as e:
         traceback.print_exc()
-        print(f"Install(git-clone) error: {url} / {e}", file=sys.stderr)
-        return result.fail(f"Install(git-clone) error: {url} / {e}")
+        print(f"Install(git-clone) error[1]: {url} / {e}", file=sys.stderr)
+        return result.fail(f"Install(git-clone)[1] error: {url} / {e}")
 
 
 def git_pull(path):
@@ -2156,7 +2158,7 @@ def gitclone_fix(files, instant_execution=False, no_deps=False):
                 return False
 
         except Exception as e:
-            print(f"Install(git-clone) error: {url} / {e}", file=sys.stderr)
+            print(f"Fix(git-clone) error: {url} / {e}", file=sys.stderr)
             return False
 
     print(f"Attempt to fixing '{files}' is done.")
@@ -2478,7 +2480,7 @@ def get_installed_pip_packages():
     return res
 
 
-async def get_current_snapshot():
+async def get_current_snapshot(custom_nodes_only = False):
     await unified_manager.reload('cache')
     await unified_manager.get_custom_nodes('default', 'cache')
 
@@ -2489,8 +2491,10 @@ async def get_current_snapshot():
         print("ComfyUI update fail: The installed ComfyUI does not have a Git repository.")
         return {}
 
-    repo = git.Repo(repo_path)
-    comfyui_commit_hash = repo.head.commit.hexsha
+    comfyui_commit_hash = None
+    if not custom_nodes_only:
+        repo = git.Repo(repo_path)
+        comfyui_commit_hash = repo.head.commit.hexsha
 
     git_custom_nodes = {}
     cnr_custom_nodes = {}
@@ -2556,7 +2560,7 @@ async def get_current_snapshot():
 
                 file_custom_nodes.append(item)
 
-    pip_packages = get_installed_pip_packages()
+    pip_packages = None if custom_nodes_only else get_installed_pip_packages()
 
     return {
         'comfyui': comfyui_commit_hash,
@@ -2567,7 +2571,7 @@ async def get_current_snapshot():
     }
 
 
-async def save_snapshot_with_postfix(postfix, path=None):
+async def save_snapshot_with_postfix(postfix, path=None, custom_nodes_only = False):
     if path is None:
         now = datetime.now()
 
@@ -2579,7 +2583,7 @@ async def save_snapshot_with_postfix(postfix, path=None):
         file_name = path.replace('\\', '/').split('/')[-1]
         file_name = file_name.split('.')[-2]
 
-    snapshot = await get_current_snapshot()
+    snapshot = await get_current_snapshot(custom_nodes_only)
     if path.endswith('.json'):
         with open(path, "w") as json_file:
             json.dump(snapshot, json_file, indent=4)

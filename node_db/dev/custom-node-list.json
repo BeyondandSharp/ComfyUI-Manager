@@ -12,6 +12,97 @@
         
         
         
+
+        {
+            "author": "fangziheng2321",
+            "title": "comfyuinode_chopmask [WIP]",
+            "reference": "https://github.com/fangziheng2321/comfyuinode_chopmask",
+            "files": [
+                "https://github.com/fangziheng2321/comfyuinode_chopmask"
+             ],
+             "install_type": "git-clone",
+             "description": "a custom comfyui node for '/fooocusinpaint_upload'\nNOTE: The files in the repo are not organized."
+        },
+        {
+            "author": "RodrigoSKohl",
+            "title": "Interior Design for Comfyui [WIP]",
+            "reference": "https://github.com/RodrigoSKohl/StableDesign-for-ComfyUI",
+            "files": [
+                "https://github.com/RodrigoSKohl/StableDesign-for-ComfyUI"
+            ],
+            "install_type": "git-clone",
+            "description": "This node is based on MykolaL/StableDesign"
+        },
+        {
+            "author": "D1-3105",
+            "title": "ComfyUI-VideoStream",
+            "reference": "https://github.com/D1-3105/ComfyUI-VideoStream",
+            "files": [
+                "https://github.com/D1-3105/ComfyUI-VideoStream"
+            ],
+            "install_type": "git-clone",
+            "description": "NODES: FloWWeaverExportSingleFrameGRPC"
+        },
+        {
+            "author": "gmorks",
+            "title": "ComfyUI Animagine prompt [WIP]",
+            "reference": "https://github.com/gmorks/ComfyUI-Animagine-Prompt",
+            "files": [
+                "https://github.com/gmorks/ComfyUI-Animagine-Prompt"
+             ],
+             "install_type": "git-clone",
+             "description": "Comfy UI node to prompt build for [a/https://huggingface.co/cagliostrolab/animagine-xl-4.0](https://huggingface.co/cagliostrolab/animagine-xl-4.0) model\nNOTE: The files in the repo are not organized."
+        },
+        {
+            "author": "wirytiox",
+            "title": "ComfyUI-Qwen [CONFLICT]",
+            "reference": "https://github.com/mr-krak3n/ComfyUI-Qwen",
+            "files": [
+                "https://github.com/mr-krak3n/ComfyUI-Qwen"
+            ],
+            "install_type": "git-clone",
+            "description": "This repository contains custom nodes for ComfyUI, designed to facilitate working with language models such as Qwen2.5 and DeepSeek. [w/This node pack is causing a name conflict with https://github.com/ZHO-ZHO-ZHO/ComfyUI-Qwen]"
+        },
+        {
+            "author": "hiusdev",
+            "title": "ComfyUI_Lah_Toffee",
+            "reference": "https://github.com/hiusdev/ComfyUI_Lah_Toffee",
+            "files": [
+                "https://github.com/hiusdev/ComfyUI_Lah_Toffee"
+            ],
+            "install_type": "git-clone",
+            "description": "NODES: Lah LoadVideoRandom"
+        },
+        {
+            "author": "hdfhssg",
+            "title": "ComfyUI_pxtool [WIP]",
+            "reference": "https://github.com/hdfhssg/ComfyUI_pxtool",
+            "files": [
+                "https://github.com/hdfhssg/ComfyUI_pxtool"
+            ],
+            "install_type": "git-clone",
+            "description": "This is a custom plugin node for ComfyUI that modifies and extends some features from existing projects. The main implementations include:\n* Reproducing some features of the [a/Stable-Diffusion-Webui-Civitai-Helper](https://github.com/zixaphir/Stable-Diffusion-Webui-Civitai-Helper) project within ComfyUI\n* Implementing a feature to randomly generate related prompt words by referencing the [a/noob-wiki dataset](https://huggingface.co/datasets/Laxhar/noob-wiki/tree/main)\nNOTE: The files in the repo are not organized."
+        },
+        {
+            "author": "dasilva333",
+            "title": "ComfyUI_MarkdownImage [WIP]",
+            "reference": "https://github.com/dasilva333/ComfyUI_MarkdownImage",
+            "files": [
+                "https://github.com/dasilva333/ComfyUI_MarkdownImage"
+            ],
+            "install_type": "git-clone",
+            "description": "Create an image using html and markdown in ComfyUI\nNOTE: The files in the repo are not organized."
+        },
+        {
+            "author": "franky519",
+            "title": "comfyui-redux-style",
+            "reference": "https://github.com/franky519/comfyui-redux-style",
+            "files": [
+                "https://github.com/franky519/comfyui-redux-style"
+            ],
+            "install_type": "git-clone",
+            "description": "NODES: Style Model Grid, Style Model Apply, Style Model Advanced"
+        },
         {
             "author": "rishipandey125",
             "title": "ComfyUI-FramePacking [WIP]",
@@ -542,16 +633,6 @@
             ],
             "install_type": "git-clone",
             "description": "Tools for creating voxel based videos"
-        },
-        {
-            "author": "Njbx",
-            "title": "ComfyUI-blockswap",
-            "reference": "https://github.com/Njbx/ComfyUI-blockswap",
-            "files": [
-                "https://github.com/Njbx/ComfyUI-blockswap"
-            ],
-            "install_type": "git-clone",
-            "description": "NODES: Block Swap"
         },
         {
             "author": "PATATAJEC",

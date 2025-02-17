@@ -5,11 +5,14 @@ import { api } from "../../scripts/api.js";
 import {
 	manager_instance, rebootAPI, install_via_git_url,
 	fetchData, md5, icons, show_message, customConfirm, customAlert, customPrompt,
-	sanitizeHTML, infoToast, showTerminal
+	sanitizeHTML, infoToast, showTerminal, setNeedRestart,
+	storeColumnWidth, restoreColumnWidth
 } from  "./common.js";
 
 // https://cenfun.github.io/turbogrid/api.html
 import TG from "./turbogrid.esm.js";
+
+const gridId = "node";
 
 const pageCss = `
 .cn-manager {
@@ -401,7 +404,6 @@ export class CustomNodesManager {
 		this.init();
 
         api.addEventListener("cm-queue-status", this.onQueueStatus);
-        api.addEventListener('reconnected', this.onReconnected);
 	}
 
 	init() {
@@ -833,6 +835,10 @@ export class CustomNodesManager {
 			this.renderSelected();
 		});
 
+		grid.bind("onColumnWidthChanged", (e, columnItem) => {
+			storeColumnWidth(gridId, columnItem)
+		});
+
 		grid.bind('onClick', (e, d) => {
 			const btn = this.getButton(d.e.target);
 			if (btn) {
@@ -1160,6 +1166,8 @@ export class CustomNodesManager {
 				return 0;
 			});
 
+		restoreColumnWidth(gridId, columns);
+
 		this.grid.setData({
 			options: options,
 			rows: rows_values,
@@ -1403,21 +1411,6 @@ export class CustomNodesManager {
 		}
 	}
 
-	async onReconnected(event) {
-		let self = CustomNodesManager.instance;
-
-		if(self.need_restart) {
-			self.need_restart = false;
-
-			const confirmed = await customConfirm("To apply the changes to the node pack's installation status, you need to refresh the browser. Would you like to refresh?");
-			if (!confirmed) {
-				return;
-			}
-
-			window.location.reload(true);
-		}
-	}
-
 	async onQueueStatus(event) {
 		let self = CustomNodesManager.instance;
 		if(event.detail.status == 'in_progress' && event.detail.ui_target == 'nodepack_manager') {
@@ -1457,7 +1450,7 @@ export class CustomNodesManager {
 		for(let hash in result){
 			let v = result[hash];
 
-			if(v != 'success')
+			if(v != 'success' && v != 'skip')
 				errorMsg += v+'\n';
 		}
 
@@ -1898,7 +1891,7 @@ export class CustomNodesManager {
 
 	showRestart() {
 		this.element.querySelector(".cn-manager-restart").style.display = "block";
-		this.need_restart = true;
+		setNeedRestart(true);
 	}
 
 	showStop() {
