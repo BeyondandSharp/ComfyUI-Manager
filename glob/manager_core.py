@@ -40,6 +40,7 @@ import manager_util
 import git_utils
 import manager_downloader
 from node_package import InstalledNodePackage
+from packaging import version
 
 
 version_code = [3, 24]
@@ -3179,9 +3180,10 @@ async def check_need_to_migrate():
 def get_comfyui_versions():
     repo = git.Repo(comfy_path)
     versions = [x.name for x in repo.tags if x.name.startswith('v')]
-    versions.reverse()  # nearest tag
 
-    versions = versions[:4]
+    versions = sorted(versions, key=version.parse, reverse=True)
+
+    versions = versions[:10]
 
     current_tag = repo.git.describe('--tags')
 
