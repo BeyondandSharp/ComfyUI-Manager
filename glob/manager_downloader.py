@@ -16,6 +16,7 @@ print(f"aria2: {aria2}")
 print(f"dir_remote: {dir_remote}")
 print(f"dir_net: {dir_net}")
 
+
 if aria2 is not None:
     secret = os.getenv('COMFYUI_MANAGER_ARIA2_SECRET')
     url = urlparse(aria2)
