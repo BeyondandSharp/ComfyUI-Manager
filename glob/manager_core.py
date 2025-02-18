@@ -3183,7 +3183,7 @@ def get_comfyui_versions():
 
     versions = sorted(versions, key=version.parse, reverse=True)
 
-    versions = versions[:10]
+    #versions = versions[:10]
 
     current_tag = repo.git.describe('--tags')
 
