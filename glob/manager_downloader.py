@@ -85,11 +85,12 @@ def aria2_download_url(model_url: str, dir_remote: str, dir_net: str, model_dir:
         model_dir = model_dir[len(core.comfy_path) :]
 
     download_dir = model_dir if model_dir.startswith('/') else os.path.join('/models', model_dir)
+    print(f"download_dir: {download_dir}")
     # 如果download_dir是绝对路径，则删除开头与comfy_base_path相同的部分，忽略大小写
     if download_dir.lower().startswith(core.comfy_path.lower()):
-        download_dir = download_dir[len(core.comfy_path):]
-    print(f"download_dir: {download_dir}")
-    download_dir_remote = os.path.join(dir_remote, download_dir[1:])
+        download_dir_rel = download_dir[len(core.comfy_path):]
+    print(f"download_dir_rel: {download_dir_rel}")
+    download_dir_remote = os.path.join(dir_remote, download_dir_rel[1:])
     print(f"download_dir_remote: {download_dir_remote}")
 
     download = aria2_find_task(download_dir_remote, filename)
@@ -114,11 +115,16 @@ def aria2_download_url(model_url: str, dir_remote: str, dir_net: str, model_dir:
 
     # 下载完成行为
     if download.is_complete:
-        download_dir_net = os.path.join(dir_net, download_dir[1:])
+        download_dir_net = os.path.join(dir_net, download_dir_rel[1:])
+        download_dir_net = download_dir_net.replace("\\", "/")
         print(f"download_dir_net: {download_dir_net}")
         if not os.path.exists(download_dir):
             os.makedirs(download_dir)
-        shutil.copy2(os.path.join(download_dir_net, filename), os.path.join(download_dir[1:], filename))
+        file_net = os.path.join(download_dir_net, filename)
+        file_local = os.path.join(download_dir, filename)
+        print(f"file_net: {file_net}")
+        print(f"file_local: {file_local}")
+        shutil.copy2(file_net, file_local)
 
 
 
