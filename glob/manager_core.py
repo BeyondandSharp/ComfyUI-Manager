@@ -6,6 +6,7 @@ description:
 import json
 import logging
 import os
+import stat
 import sys
 import subprocess
 import re
@@ -52,6 +53,12 @@ DEFAULT_CHANNEL = "https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/ma
 
 default_custom_nodes_path = None
 
+def remove_readonly(func, path, _):
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
+
+def rmtree_force(path):
+    shutil.rmtree(path, onexc=remove_readonly)
 
 def get_default_custom_nodes_path():
     global default_custom_nodes_path
@@ -950,7 +957,7 @@ class UnifiedManager:
 
         if extracted is None:
             if len(os.listdir(install_path)) == 0:
-                shutil.rmtree(install_path)
+                rmtree_force(install_path)
 
             return result.fail(f'Empty archive file: {node_id}@{version_spec}')
 
@@ -1161,14 +1168,14 @@ class UnifiedManager:
         ver_and_path = self.active_nodes.get(node_id)
 
         if ver_and_path is not None and os.path.exists(ver_and_path[1]):
-            shutil.rmtree(ver_and_path[1])
+            rmtree_force(ver_and_path[1])
             result.items.append(ver_and_path)
             del self.active_nodes[node_id]
 
         # remove from nightly inactives
         fullpath = self.nightly_inactive_nodes.get(node_id)
         if fullpath is not None and os.path.exists(fullpath):
-            shutil.rmtree(fullpath)
+            rmtree_force(fullpath)
             result.items.append(('nightly', fullpath))
             del self.nightly_inactive_nodes[node_id]
 
@@ -1176,7 +1183,7 @@ class UnifiedManager:
         ver_map = self.cnr_inactive_nodes.get(node_id)
         if ver_map is not None:
             for key, fullpath in ver_map.items():
-                shutil.rmtree(fullpath)
+                rmtree_force(fullpath)
                 result.items.append((key, fullpath))
             del self.cnr_inactive_nodes[node_id]
 
@@ -1211,7 +1218,7 @@ class UnifiedManager:
         result.to_path = install_path
 
         if extracted is None:
-            shutil.rmtree(install_path)
+            rmtree_force(install_path)
             return result.fail(f'Empty archive file: {node_id}@{version_spec}')
 
         # create .tracking file
@@ -2185,7 +2192,7 @@ def rmtree(path):
 
             if platform.system() == "Windows":
                 manager_funcs.run_script(['attrib', '-R', path + '\\*', '/S'])
-            shutil.rmtree(path)
+            rmtree_force(path)
 
             return True
 
