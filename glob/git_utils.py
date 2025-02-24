@@ -40,7 +40,8 @@ def git_url(fullpath):
     if not os.path.exists(git_config_path):
         return None
 
-    config = configparser.ConfigParser()
+    # Set `strict=False` to allow duplicate `vscode-merge-base` sections, addressing <https://github.com/ltdrdata/ComfyUI-Manager/issues/1529>
+    config = configparser.ConfigParser(strict=False)
     config.read(git_config_path)
 
     for k, v in config.items():
@@ -53,7 +54,14 @@ def git_url(fullpath):
 def normalize_url(url) -> str:
     if 'github' in url or (GITHUB_ENDPOINT is not None and GITHUB_ENDPOINT in url):
         author = os.path.basename(os.path.dirname(url))
+
+        if author.startswith('git@github.com:'):
+            author = author.split(':')[1]
+
         repo_name = os.path.basename(url)
+        if repo_name.endswith('.git'):
+            repo_name = repo_name[:-4]
+
         url = f"https://github.com/{author}/{repo_name}"
 
     return url

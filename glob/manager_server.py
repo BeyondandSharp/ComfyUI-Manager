@@ -187,6 +187,8 @@ set_preview_method(core.get_config()['preview_method'])
 def set_component_policy(mode):
     core.get_config()['component_policy'] = mode
 
+def set_update_policy(mode):
+    core.get_config()['update_policy'] = mode
 
 def print_comfyui_version():
     global comfy_ui_hash
@@ -209,7 +211,7 @@ def print_comfyui_version():
         comfyui_tag = core.get_comfyui_tag()
 
         try:
-            if core.comfy_ui_commit_datetime.date() < core.comfy_ui_required_commit_datetime.date():
+            if not os.environ.get('__COMFYUI_DESKTOP_VERSION__') and core.comfy_ui_commit_datetime.date() < core.comfy_ui_required_commit_datetime.date():
                 logging.warning(f"\n\n## [WARN] ComfyUI-Manager: Your ComfyUI version ({core.comfy_ui_revision})[{core.comfy_ui_commit_datetime.date()}] is too old. Please update to the latest version. ##\n\n")
         except:
             pass
@@ -452,20 +454,29 @@ async def task_worker():
 
         return {'msg':f"An error occurred while updating '{node_name}'."}
 
-    async def do_update_comfyui() -> str:
+    async def do_update_comfyui(is_stable) -> str:
         try:
             repo_path = os.path.dirname(folder_paths.__file__)
-            res = core.update_path(repo_path)
-
+            latest_tag = None
+            if is_stable:
+                res, latest_tag = core.update_to_stable_comfyui(repo_path)
+            else:
+                res = core.update_path(repo_path)
+                
             if res == "fail":
                 logging.error("ComfyUI update fail: The installed ComfyUI does not have a Git repository.")
                 return "The installed ComfyUI does not have a Git repository."
             elif res == "updated":
-                logging.info("ComfyUI is updated.")
-                return "success"
+                if is_stable:
+                    logging.info("ComfyUI is updated to latest stable version.")
+                    return "success-stable-"+latest_tag
+                else:
+                    logging.info("ComfyUI is updated to latest nightly version.")
+                    return "success-nightly"
             else:  # skipped
                 logging.info("ComfyUI is up-to-date.")
                 return "skip"
+
         except Exception:
             traceback.print_exc()
 
@@ -597,7 +608,7 @@ async def task_worker():
             elif kind == 'update-main':
                 msg = await do_update(item)
             elif kind == 'update-comfyui':
-                msg = await do_update_comfyui()
+                msg = await do_update_comfyui(item[1])
             elif kind == 'fix':
                 msg = await do_fix(item)
             elif kind == 'uninstall':
@@ -1337,14 +1348,15 @@ async def update_custom_node(request):
 
 @routes.get("/manager/queue/update_comfyui")
 async def update_comfyui(request):
-    task_queue.put(("update-comfyui", ('comfyui',)))
+    is_stable = core.get_config()['update_policy'] != 'nightly-comfyui'
+    task_queue.put(("update-comfyui", ('comfyui', is_stable)))
     return web.Response(status=200)
 
 
 @routes.get("/comfyui_manager/comfyui_versions")
 async def comfyui_versions(request):
     try:
-        res, current = core.get_comfyui_versions()
+        res, current, latest = core.get_comfyui_versions()
         return web.json_response({'versions': res, 'current': current}, status=200, content_type='application/json')
     except Exception as e:
         logging.error(f"ComfyUI update fail: {e}", file=sys.stderr)
@@ -1435,13 +1447,24 @@ async def preview_method(request):
     return web.Response(status=200)
 
 
-@routes.get("/manager/component/policy")
+@routes.get("/manager/policy/component")
 async def component_policy(request):
     if "value" in request.rel_url.query:
         set_component_policy(request.rel_url.query['value'])
         core.write_config()
     else:
         return web.Response(text=core.get_config()['component_policy'], status=200)
+
+    return web.Response(status=200)
+
+
+@routes.get("/manager/policy/update")
+async def update_policy(request):
+    if "value" in request.rel_url.query:
+        set_update_policy(request.rel_url.query['value'])
+        core.write_config()
+    else:
+        return web.Response(text=core.get_config()['update_policy'], status=200)
 
     return web.Response(status=200)
 
@@ -1501,7 +1524,11 @@ async def get_notice(request):
                     markdown_content = match.group(1)
                     version_tag = core.get_comfyui_tag()
                     if version_tag is None:
-                        markdown_content += f"<HR>ComfyUI: {core.comfy_ui_revision}[{comfy_ui_hash[:6]}]({core.comfy_ui_commit_datetime.date()})"
+                        version_tag = os.environ.get('__COMFYUI_DESKTOP_VERSION__')
+                        if version_tag is not None:
+                            markdown_content += f"<HR>ComfyUI: {version_tag} [Desktop]"
+                        else:
+                            markdown_content += f"<HR>ComfyUI: {core.comfy_ui_revision}[{comfy_ui_hash[:6]}]({core.comfy_ui_commit_datetime.date()})"
                     else:
                         markdown_content += (f"<HR>ComfyUI: {version_tag}<BR>"
                                              f"&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;({core.comfy_ui_commit_datetime.date()})")
