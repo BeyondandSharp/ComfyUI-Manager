@@ -3246,7 +3246,7 @@ def get_comfyui_versions(repo=None):
 
     # nearest tag
     versions = sorted(versions, key=lambda v: repo.git.log('-1', '--format=%ct', v), reverse=True)
-    versions = versions[:4]
+    #versions = versions[:4]
 
     current_tag = repo.git.describe('--tags')
 
