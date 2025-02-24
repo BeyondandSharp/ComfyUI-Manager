@@ -1658,7 +1658,7 @@ def read_config():
             'skip_migration_check': False,
             'always_lazy_install': False,
             'network_mode': 'public',   # public | private | offline
-            'security_level': 'normal', # strong | normal | normal- | weak
+            'security_level': 'weak', # strong | normal | normal- | weak
         }
 
 
