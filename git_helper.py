@@ -9,6 +9,7 @@ import yaml
 import requests
 from tqdm.auto import tqdm
 from git.remote import RemoteProgress
+import time
 
 
 comfy_path = os.environ.get('COMFYUI_PATH')
@@ -56,8 +57,16 @@ class GitProgress(RemoteProgress):
     def __init__(self):
         super().__init__()
         self.pbar = tqdm(ascii=True)
+        self.last_update_time = time.time()
+        self.timeout = 60
 
     def update(self, op_code, cur_count, max_count=None, message=''):
+        current_time = time.time()
+        if current_time - self.last_update_time > self.timeout:
+            print("TIMEOUT 60s")
+            raise TimeoutError("Git clone timeout")
+        
+        self.last_update_time = current_time
         self.pbar.total = max_count
         self.pbar.n = cur_count
         self.pbar.pos = 0
@@ -79,22 +88,32 @@ def gitclone(custom_nodes_path, url, target_hash=None, repo_path=None):
             url = url.replace('https://', 'http://')
         print(f"url: {url}")
         # Clone the repository from the remote URL
-        repo = git.Repo.clone_from(
-            url,
-            repo_path,
-            recursive=True,
-            progress=GitProgress(),
-            allow_unsafe_options=True,
-            multi_options=[f"--config http.proxy={gitcache_http_proxy}"]
-        )
+        while True:
+            try:
+                repo = git.Repo.clone_from(
+                    url,
+                    repo_path,
+                    recursive=True,
+                    progress=GitProgress(),
+                    allow_unsafe_options=True,
+                    multi_options=[f"--config http.proxy={gitcache_http_proxy}"]
+                )
+                break
+            except TimeoutError:
+                print("Retry git clone")
     else:
         # Clone the repository from the remote URL
-        repo = git.Repo.clone_from(
-            url,
-            repo_path,
-            recursive=True,
-            progress=GitProgress()
-        )
+        while True:
+            try:
+                repo = git.Repo.clone_from(
+                    url,
+                    repo_path,
+                    recursive=True,
+                    progress=GitProgress()
+                )
+                break
+            except TimeoutError:
+                print("重新开始克隆任务...")
 
     if target_hash is not None:
         print(f"CHECKOUT: {repo_name} [{target_hash}]")
