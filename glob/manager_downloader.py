@@ -89,6 +89,8 @@ def aria2_download_url(model_url: str, dir_remote: str, dir_net: str, model_dir:
     # 如果download_dir是绝对路径，则删除开头与comfy_base_path相同的部分，忽略大小写
     if download_dir.lower().startswith(core.comfy_path.lower()):
         download_dir_rel = download_dir[len(core.comfy_path):]
+    else :
+        download_dir_rel = download_dir
     print(f"download_dir_rel: {download_dir_rel}")
     download_dir_remote = os.path.join(dir_remote, download_dir_rel[1:])
     print(f"download_dir_remote: {download_dir_remote}")
