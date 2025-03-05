@@ -14,6 +14,7 @@ import shutil
 import configparser
 import platform
 from datetime import datetime
+import copy
 
 import git
 from git.remote import RemoteProgress
@@ -2127,6 +2128,7 @@ def git_pull(path):
 
 
 async def get_data_by_mode(mode, filename, channel_url=None):
+    print(f"mode: {mode} filename: {filename} channel_url: {channel_url}")
     if channel_url in get_channel_dict():
         channel_url = get_channel_dict()[channel_url]
 
@@ -2167,6 +2169,32 @@ async def get_data_by_mode(mode, filename, channel_url=None):
         print(f"[ComfyUI-Manager] Due to a network error, switching to local mode.\n=> {filename}\n=> {e}")
         uri = os.path.join(manager_util.comfyui_manager_path, filename)
         json_obj = await manager_util.get_data(uri)
+    
+    # load CUSTOMNODEDB from env
+    if 'CUSTOMNODEDB' in os.environ:
+        custom_node_db = os.environ['CUSTOMNODEDB']
+        uri = os.path.join(custom_node_db, filename)
+        if os.path.exists(uri):
+            json_obj_custom = await manager_util.get_data(uri)
+            # json merge
+            json_obj_merge = copy.deepcopy(json_obj)
+            for key, value in json_obj_custom.items():
+                print('merge', filename, key)
+                if key not in json_obj_merge:
+                    continue
+                else:
+                    models_dict = {}
+                    for item in json_obj_merge.get(key, []):
+                        if "reference" in item:
+                            models_dict[item["reference"]] = item
+
+                    for item in json_obj_custom[key]:
+                        if "reference" in item:
+                            models_dict[item["reference"]] = item
+                        else:
+                            json_obj_merge[key].append(item)
+                    json_obj_merge[key] = list(models_dict.values())
+            json_obj = json_obj_merge
 
     return json_obj
 

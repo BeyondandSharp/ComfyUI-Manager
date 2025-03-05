@@ -19,3 +19,6 @@ python json-checker.py "node_db\legacy\extension-node-map.json"
 python json-checker.py "node_db\forked\custom-node-list.json"
 python json-checker.py "node_db\forked\model-list.json"
 python json-checker.py "node_db\forked\extension-node-map.json"
+
+python json-checker.py "node_db\custom\model-list.json"
+python json-checker.py "node_db\custom\custom-node-list.json"

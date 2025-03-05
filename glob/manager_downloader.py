@@ -97,7 +97,14 @@ def aria2_download_url(model_url: str, dir_remote: str, dir_net: str, model_dir:
 
     download = aria2_find_task(download_dir_remote, filename)
     if download is None:
+        if model_url.startswith('https://huggingface.co'):
+            token_path = os.environ['TOKEN_PATH']
+            # 读取token
+            with open(token_path, 'r') as f:
+                token = f.read()
+            headers = {"Authorization: Bearer " + token}
         options = {'dir': download_dir_remote, 'out': filename}
+        options['header'] = [f"{k}: {v}" for k, v in headers.items()]
         download = aria2.add(model_url, options)[0]
 
     if download.is_active:

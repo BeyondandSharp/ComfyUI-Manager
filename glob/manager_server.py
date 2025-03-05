@@ -561,6 +561,19 @@ async def task_worker():
 
                     if res:
                         return 'success'
+                # 如果model_url没有://或不是file://开头，则直接复制到model_dir
+                elif not "://" in model_url:
+                    model_dir = get_model_dir(json_data, True)
+                    file_local = os.path.join(model_dir, json_data['filename'])
+                    print('copy', model_url, 'to', file_local)
+                    try:
+                        shutil.copy2(model_url, file_local)
+                        if model_path.endswith('.zip'):
+                            res = core.unzip(model_path)
+                        else:
+                            res = True
+                    except Exception as e:
+                        print(f"Error: {e}")
                 else:
                     res = download_url_with_agent(model_url, model_path)
                     if res and model_path.endswith('.zip'):
