@@ -1048,12 +1048,12 @@ export class ModelManager {
 	}
 
 	showError(err) {
-		console.log(`Error: ${err}`);
+		//console.log(`Error: ${err}`);
 		this.showMessage(err, "red");
 	}
 
 	showMessage(msg, color) {
-		console.log(`Message: ${msg}`);
+		//console.log(`Message: ${msg}`);
 		if (color) {
 			msg = `<font color="${color}">${msg}</font>`;
 		}
@@ -1061,7 +1061,7 @@ export class ModelManager {
 	}
 
 	showStatus(msg, color) {
-		console.log(`Status: ${msg}`);
+		//console.log(`Status: ${msg}`);
 		if (color) {
 			msg = `<font color="${color}">${msg}</font>`;
 		}

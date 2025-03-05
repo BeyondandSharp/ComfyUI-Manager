@@ -102,9 +102,9 @@ def aria2_download_url(model_url: str, dir_remote: str, dir_net: str, model_dir:
             # 读取token
             with open(token_path, 'r') as f:
                 token = f.read()
-            headers = {"Authorization: Bearer " + token}
-        options = {'dir': download_dir_remote, 'out': filename}
-        options['header'] = [f"{k}: {v}" for k, v in headers.items()]
+            headers = ["Authorization: Bearer " + token]
+        options = {'dir': download_dir_remote, 'out': filename, 'header': headers}
+        #options['header'] = [f"{k}: {v}" for k, v in headers.items()]
         download = aria2.add(model_url, options)[0]
 
     if download.is_active:
