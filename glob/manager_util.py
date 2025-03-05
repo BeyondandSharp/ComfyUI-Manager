@@ -12,6 +12,7 @@ import subprocess
 import sys
 import re
 import logging
+import platform
 
 
 cache_lock = threading.Lock()
@@ -20,6 +21,16 @@ comfyui_manager_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '
 cache_dir = os.path.join(comfyui_manager_path, '.cache')  # This path is also updated together in **manager_core.update_user_directory**.
 
 use_uv = False
+
+
+def add_python_path_to_env():
+    if platform.system() != "Windows":
+        sep = ':'
+    else:
+        sep = ';'
+
+    os.environ['PATH'] = os.path.dirname(sys.executable)+sep+os.environ['PATH']
+
 
 def make_pip_cmd(cmd):
     if use_uv:
@@ -265,8 +276,9 @@ torch_torchvision_torchaudio_version_map = {
 
 
 class PIPFixer:
-    def __init__(self, prev_pip_versions):
+    def __init__(self, prev_pip_versions, comfyui_path):
         self.prev_pip_versions = { **prev_pip_versions }
+        self.comfyui_path = comfyui_path
 
     def torch_rollback(self):
         spec = self.prev_pip_versions['torch'].split('+')
@@ -346,7 +358,7 @@ class PIPFixer:
 
                 if len(targets) > 0:
                     for x in targets:
-                        cmd = make_pip_cmd(['install', f"{x}=={versions[0].version_string}"])
+                        cmd = make_pip_cmd(['install', f"{x}=={versions[0].version_string}", "numpy<2"])
                         subprocess.check_output(cmd, universal_newlines=True)
 
                     logging.info(f"[ComfyUI-Manager] 'opencv' dependencies were fixed: {targets}")
@@ -363,6 +375,22 @@ class PIPFixer:
                     subprocess.check_output(cmd , universal_newlines=True)
         except Exception as e:
             logging.error("[ComfyUI-Manager] Failed to restore numpy")
+            logging.error(e)
+
+        # fix missing frontend
+        try:
+            front = new_pip_versions.get('comfyui_frontend_package')
+            if front is None:
+                requirements_path = os.path.join(self.comfyui_path, 'requirements.txt')
+
+                with open(requirements_path, 'r') as file:
+                    lines = file.readlines()
+                
+                front_line = next((line.strip() for line in lines if line.startswith('comfyui-frontend-package')), None)
+                cmd = make_pip_cmd(['install', front_line])
+                subprocess.check_output(cmd , universal_newlines=True)
+        except Exception as e:
+            logging.error("[ComfyUI-Manager] Failed to restore comfyui_frontend_package")
             logging.error(e)
 
 

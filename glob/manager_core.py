@@ -45,7 +45,7 @@ from node_package import InstalledNodePackage
 from packaging import version
 
 
-version_code = [3, 25, 1]
+version_code = [3, 28]
 version_str = f"V{version_code[0]}.{version_code[1]}" + (f'.{version_code[2]}' if len(version_code) > 2 else '')
 
 
@@ -54,12 +54,6 @@ DEFAULT_CHANNEL = "https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/ma
 
 default_custom_nodes_path = None
 
-def remove_readonly(func, path, _):
-    os.chmod(path, stat.S_IWRITE)
-    func(path)
-
-def rmtree_force(path):
-    shutil.rmtree(path, onexc=remove_readonly)
 
 def get_default_custom_nodes_path():
     global default_custom_nodes_path
@@ -837,7 +831,7 @@ class UnifiedManager:
         else:
             if os.path.exists(requirements_path) and not no_deps:
                 print("Install: pip packages")
-                pip_fixer = manager_util.PIPFixer(manager_util.get_installed_packages())
+                pip_fixer = manager_util.PIPFixer(manager_util.get_installed_packages(), comfy_path)
                 res = True
                 lines = manager_util.robust_readlines(requirements_path)
                 for line in lines:
@@ -962,7 +956,7 @@ class UnifiedManager:
 
         if extracted is None:
             if len(os.listdir(install_path)) == 0:
-                rmtree_force(install_path)
+                try_rmtree(install_path)
 
             return result.fail(f'Empty archive file: {node_id}@{version_spec}')
 
@@ -1006,7 +1000,7 @@ class UnifiedManager:
 
         return result
 
-    def unified_enable(self, node_id, version_spec=None):
+    def unified_enable(self, node_id: str, version_spec=None):
         """
         priority if version_spec == None
         1. CNR latest in disk
@@ -1017,6 +1011,9 @@ class UnifiedManager:
         """
 
         result = ManagedResult('enable')
+
+        if 'comfyui-manager' in node_id.lower():
+            return result.fail(f"ignored: enabling '{node_id}'")
 
         if version_spec is None:
             version_spec = self.resolve_unspecified_version(node_id, guess_mode='inactive')
@@ -1083,8 +1080,11 @@ class UnifiedManager:
         self.active_nodes[node_id] = version_spec, to_path
         return result.with_target(to_path)
 
-    def unified_disable(self, node_id, is_unknown):
+    def unified_disable(self, node_id: str, is_unknown):
         result = ManagedResult('disable')
+
+        if 'comfyui-manager' in node_id.lower():
+            return result.fail(f"ignored: disabling '{node_id}'")
 
         if is_unknown:
             version_spec = 'unknown'
@@ -1141,6 +1141,9 @@ class UnifiedManager:
         """
         result = ManagedResult('uninstall')
 
+        if 'comfyui-manager' in node_id.lower():
+            return result.fail(f"ignored: uninstalling '{node_id}'")
+
         if is_unknown:
             # remove from actives
             repo_and_path = self.unknown_active_nodes.get(node_id)
@@ -1173,14 +1176,14 @@ class UnifiedManager:
         ver_and_path = self.active_nodes.get(node_id)
 
         if ver_and_path is not None and os.path.exists(ver_and_path[1]):
-            rmtree_force(ver_and_path[1])
+            try_rmtree(node_id, ver_and_path[1])
             result.items.append(ver_and_path)
             del self.active_nodes[node_id]
 
         # remove from nightly inactives
         fullpath = self.nightly_inactive_nodes.get(node_id)
         if fullpath is not None and os.path.exists(fullpath):
-            rmtree_force(fullpath)
+            try_rmtree(node_id, fullpath)
             result.items.append(('nightly', fullpath))
             del self.nightly_inactive_nodes[node_id]
 
@@ -1188,7 +1191,7 @@ class UnifiedManager:
         ver_map = self.cnr_inactive_nodes.get(node_id)
         if ver_map is not None:
             for key, fullpath in ver_map.items():
-                rmtree_force(fullpath)
+                try_rmtree(node_id, fullpath)
                 result.items.append((key, fullpath))
             del self.cnr_inactive_nodes[node_id]
 
@@ -1197,8 +1200,11 @@ class UnifiedManager:
 
         return result
 
-    def cnr_install(self, node_id, version_spec=None, instant_execution=False, no_deps=False, return_postinstall=False):
+    def cnr_install(self, node_id: str, version_spec=None, instant_execution=False, no_deps=False, return_postinstall=False):
         result = ManagedResult('install-cnr')
+
+        if 'comfyui-manager' in node_id.lower():
+            return result.fail(f"ignored: installing '{node_id}'")
 
         node_info = cnr_utils.install_node(node_id, version_spec)
         if node_info is None or not node_info.download_url:
@@ -1223,7 +1229,7 @@ class UnifiedManager:
         result.to_path = install_path
 
         if extracted is None:
-            rmtree_force(install_path)
+            try_rmtree(install_path)
             return result.fail(f'Empty archive file: {node_id}@{version_spec}')
 
         # create .tracking file
@@ -1244,9 +1250,12 @@ class UnifiedManager:
 
         return result
 
-    def repo_install(self, url, repo_path, instant_execution=False, no_deps=False, return_postinstall=False):
+    def repo_install(self, url: str, repo_path: str, instant_execution=False, no_deps=False, return_postinstall=False):
         result = ManagedResult('install-git')
         result.append(url)
+
+        if 'comfyui-manager' in url.lower():
+            return result.fail(f"ignored: installing '{url}'")
 
         if not is_valid_url(url):
             return result.fail(f"Invalid git url: {url}")
@@ -1368,7 +1377,7 @@ class UnifiedManager:
         else:
             return self.cnr_switch_version(node_id, instant_execution=instant_execution, no_deps=no_deps, return_postinstall=return_postinstall).with_ver('cnr')
 
-    async def install_by_id(self, node_id, version_spec=None, channel=None, mode=None, instant_execution=False, no_deps=False, return_postinstall=False):
+    async def install_by_id(self, node_id: str, version_spec=None, channel=None, mode=None, instant_execution=False, no_deps=False, return_postinstall=False):
         """
         priority if version_spec == None
         1. CNR latest
@@ -1376,6 +1385,9 @@ class UnifiedManager:
 
         remark: latest version_spec is not allowed. Must be resolved before call.
         """
+
+        if 'comfyui-manager' in node_id.lower():
+            return ManagedResult('skip').fail(f"ignored: installing '{node_id}'")
 
         repo_url = None
         if version_spec is None:
@@ -1481,7 +1493,7 @@ def identify_node_pack_from_path(fullpath):
         # cnr
         cnr = cnr_utils.read_cnr_info(fullpath)
         if cnr is not None:
-            return module_name, cnr['version'], cnr['id']
+            return module_name, cnr['version'], cnr['id'], None
 
         return None
     else:
@@ -1489,10 +1501,18 @@ def identify_node_pack_from_path(fullpath):
         cnr_id = cnr_utils.read_cnr_id(fullpath)
         commit_hash = git_utils.get_commit_hash(fullpath)
 
+        github_id = git_utils.normalize_to_github_id(repo_url)
+        if github_id is None:
+            try:
+                github_id = os.path.basename(repo_url)
+            except:
+                logging.warning(f"[ComfyUI-Manager] unexpected repo url: {repo_url}")
+                github_id = module_name
+
         if cnr_id is not None:
-            return module_name, commit_hash, cnr_id
+            return module_name, commit_hash, cnr_id, github_id
         else:
-            return module_name, commit_hash, ''
+            return module_name, commit_hash, '', github_id
 
 
 def get_installed_node_packs():
@@ -1510,7 +1530,7 @@ def get_installed_node_packs():
 
             is_disabled = not y.endswith('.disabled')
 
-            res[info[0]] = { 'ver': info[1], 'cnr_id': info[2], 'enabled': is_disabled }
+            res[info[0]] = { 'ver': info[1], 'cnr_id': info[2], 'aux_id': info[3], 'enabled': is_disabled }
 
         disabled_dirs = os.path.join(x, '.disabled')
         if os.path.exists(disabled_dirs):
@@ -1523,7 +1543,7 @@ def get_installed_node_packs():
                 if info is None:
                     continue
 
-                res[info[0]] = { 'ver': info[1], 'cnr_id': info[2], 'enabled': False }
+                res[info[0]] = { 'ver': info[1], 'cnr_id': info[2], 'aux_id': info[3], 'enabled': False }
 
     return res
 
@@ -1597,7 +1617,8 @@ def write_config():
         'security_level': get_config()['security_level'],
         'skip_migration_check': get_config()['skip_migration_check'],
         'always_lazy_install': get_config()['always_lazy_install'],
-        'network_mode': get_config()['network_mode']
+        'network_mode': get_config()['network_mode'],
+        'db_mode': get_config()['db_mode'],
     }
 
     directory = os.path.dirname(manager_config_path)
@@ -1637,6 +1658,7 @@ def read_config():
                     'always_lazy_install': get_bool('always_lazy_install', False),
                     'network_mode': default_conf.get('network_mode', 'public').lower(),
                     'security_level': default_conf.get('security_level', 'normal').lower(),
+                    'db_mode': default_conf.get('db_mode', 'cache').lower(),
                }
 
     except Exception:
@@ -1660,6 +1682,7 @@ def read_config():
             'always_lazy_install': False,
             'network_mode': 'public',   # public | private | offline
             'security_level': 'weak', # strong | normal | normal- | weak
+            'db_mode': 'cache',         # local | cache | remote
         }
 
 
@@ -1730,18 +1753,43 @@ def switch_to_default_branch(repo):
     return False
 
 
+def reserve_script(repo_path, install_cmds):
+    if not os.path.exists(manager_startup_script_path):
+        os.makedirs(manager_startup_script_path)
+
+    script_path = os.path.join(manager_startup_script_path, "install-scripts.txt")
+    with open(script_path, "a") as file:
+        obj = [repo_path] + install_cmds
+        file.write(f"{obj}\n")
+
+def remove_readonly(func, path, _):
+    """
+    处理只读文件删除的回调函数，适用于不同操作系统
+    """
+    # 检查当前操作系统
+    if platform.system() == 'Windows':
+        # Windows 系统需要明确更改文件权限
+        os.chmod(path, stat.S_IWRITE)
+    else:
+        # Linux/Unix 系统使用更通用的权限设置
+        os.chmod(path, stat.S_IWUSR | stat.S_IRUSR)
+    
+    # 执行原始删除函数
+    func(path)
+
+def try_rmtree(title, fullpath):
+    try:
+        shutil.rmtree(fullpath, onexc=remove_readonly)
+    except Exception as e:
+        logging.warning(f"[ComfyUI-Manager] An error occurred while deleting '{fullpath}', so it has been scheduled for deletion upon restart.\nEXCEPTION: {e}")
+        reserve_script(title, ["#LAZY-DELETE-NODEPACK", fullpath])
+
+
 def try_install_script(url, repo_path, install_cmd, instant_execution=False):
     if not instant_execution and (
             (len(install_cmd) > 0 and install_cmd[0].startswith('#')) or platform.system() == "Windows" or get_config()['always_lazy_install']
     ):
-        if not os.path.exists(manager_startup_script_path):
-            os.makedirs(manager_startup_script_path)
-
-        script_path = os.path.join(manager_startup_script_path, "install-scripts.txt")
-        with open(script_path, "a") as file:
-            obj = [repo_path] + install_cmd
-            file.write(f"{obj}\n")
-
+        reserve_script(repo_path, install_cmd)
         return True
     else:
         if len(install_cmd) == 5 and install_cmd[2:4] == ['pip', 'install']:
@@ -1852,7 +1900,7 @@ def execute_install_script(url, repo_path, lazy_mode=False, instant_execution=Fa
     else:
         if os.path.exists(requirements_path) and not no_deps:
             print("Install: pip packages")
-            pip_fixer = manager_util.PIPFixer(manager_util.get_installed_packages())
+            pip_fixer = manager_util.PIPFixer(manager_util.get_installed_packages(), comfy_path)
             with open(requirements_path, "r") as requirements_file:
                 for line in requirements_file:
                     #handle comments
@@ -2240,7 +2288,7 @@ def rmtree(path):
 
             if platform.system() == "Windows":
                 manager_funcs.run_script(['attrib', '-R', path + '\\*', '/S'])
-            rmtree_force(path)
+            try_rmtree(path)
 
             return True
 
@@ -2406,7 +2454,14 @@ def gitclone_update(files, instant_execution=False, skip_script=False, msg_prefi
 def update_to_stable_comfyui(repo_path):
     try:
         repo = git.Repo(repo_path)
-        repo.git.checkout(repo.heads.master)
+        try:
+            repo.git.checkout(repo.heads.master)
+        except:
+            logging.error(f"[ComfyUI-Manager] Failed to checkout 'master' branch.\nrepo_path={repo_path}\nAvailable branches:")
+            for branch in repo.branches:
+                logging.error('\t'+branch.name)
+            return "fail", None
+
         versions, current_tag, _ = get_comfyui_versions(repo)
         
         if len(versions) == 0 or (len(versions) == 1 and versions[0] == 'nightly'):
@@ -2579,15 +2634,12 @@ async def get_current_snapshot(custom_nodes_only = False):
     # Get ComfyUI hash
     repo_path = comfy_path
 
-    if not os.path.exists(os.path.join(repo_path, '.git')):
-        print("ComfyUI update fail: The installed ComfyUI does not have a Git repository.")
-        return {}
-
     comfyui_commit_hash = None
     if not custom_nodes_only:
-        repo = git.Repo(repo_path)
-        comfyui_commit_hash = repo.head.commit.hexsha
-
+        if os.path.exists(os.path.join(repo_path, '.git')):
+            repo = git.Repo(repo_path)
+            comfyui_commit_hash = repo.head.commit.hexsha
+        
     git_custom_nodes = {}
     cnr_custom_nodes = {}
     file_custom_nodes = []
@@ -3067,6 +3119,10 @@ async def restore_snapshot(snapshot_path, git_helper_extras=None):
 
         # normalize github repo
         for k, v in _git_info.items():
+            # robust filter out comfyui-manager while restoring snapshot
+            if 'comfyui-manager' in k.lower():
+                continue
+
             norm_k = git_utils.normalize_url(k)
             git_info[norm_k] = v
 
@@ -3300,7 +3356,9 @@ def switch_comfyui(tag):
 
     if tag == 'nightly':
         repo.git.checkout('master')
-        repo.remotes.origin.pull()
+        tracking_branch = repo.active_branch.tracking_branch()
+        remote_name = tracking_branch.remote_name
+        repo.remotes[remote_name].pull()
         print("[ComfyUI-Manager] ComfyUI version is switched to the latest 'master' version")
     else:
         repo.git.checkout(tag)

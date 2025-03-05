@@ -190,6 +190,9 @@ def set_component_policy(mode):
 def set_update_policy(mode):
     core.get_config()['update_policy'] = mode
 
+def set_db_mode(mode):
+    core.get_config()['db_mode'] = mode
+
 def print_comfyui_version():
     global comfy_ui_hash
     global comfyui_tag
@@ -447,7 +450,7 @@ async def task_worker():
                     return base_res
 
             base_res['msg'] = f"An error occurred while updating '{node_name}'."
-            logging.error(f"\nERROR: An error occurred while updating '{node_name}'.")
+            logging.error(f"\nERROR: An error occurred while updating '{node_name}'. (res.result={res.result}, res.action={res.action})")
             return base_res
         except Exception:
             traceback.print_exc()
@@ -464,8 +467,8 @@ async def task_worker():
                 res = core.update_path(repo_path)
                 
             if res == "fail":
-                logging.error("ComfyUI update fail: The installed ComfyUI does not have a Git repository.")
-                return "The installed ComfyUI does not have a Git repository."
+                logging.error("ComfyUI update failed")
+                return "fail"
             elif res == "updated":
                 if is_stable:
                     logging.info("ComfyUI is updated to latest stable version.")
@@ -829,7 +832,7 @@ async def fetch_customnode_list(request):
     """
     provide unified custom node list
     """
-    if "skip_update" in request.rel_url.query and request.rel_url.query["skip_update"] == "true":
+    if request.rel_url.query.get("skip_update", '').lower() == "true":
         skip_update = True
     else:
         skip_update = False
@@ -846,7 +849,7 @@ async def fetch_customnode_list(request):
     core.populate_github_stats(node_packs, await json_obj_github)
     core.populate_favorites(node_packs, await json_obj_extras)
 
-    check_state_of_git_node_pack(node_packs, False, do_update_check=not skip_update)
+    check_state_of_git_node_pack(node_packs, not skip_update, do_update_check=not skip_update)
 
     for v in node_packs.values():
         populate_markdown(v)
@@ -1208,7 +1211,15 @@ async def install_custom_node(request):
     git_url = None
 
     if json_data['version'] != 'unknown':
-        selected_version = json_data.get('selected_version', 'latest')
+        selected_version = json_data.get('selected_version')
+
+        if skip_post_install:
+            if cnr_id in core.unified_manager.nightly_inactive_nodes or cnr_id in core.unified_manager.cnr_inactive_nodes:
+                core.unified_manager.unified_enable(cnr_id)
+                return web.Response(status=200)
+        elif selected_version is None:
+            selected_version = 'latest'
+
         if selected_version != 'nightly':
             risky_level = 'low'
             node_spec_str = f"{cnr_id}@{selected_version}"
@@ -1460,6 +1471,18 @@ async def preview_method(request):
     return web.Response(status=200)
 
 
+@routes.get("/manager/db_mode")
+async def db_mode(request):
+    if "value" in request.rel_url.query:
+        set_db_mode(request.rel_url.query['value'])
+        core.write_config()
+    else:
+        return web.Response(text=core.get_config()['db_mode'], status=200)
+
+    return web.Response(status=200)
+
+
+
 @routes.get("/manager/policy/component")
 async def component_policy(request):
     if "value" in request.rel_url.query:
@@ -1591,6 +1614,9 @@ def restart(self):
 
     if sys.platform.startswith('win32'):
         cmds = ['"' + sys.executable + '"', '"' + sys_argv[0] + '"'] + sys_argv[1:]
+    elif sys_argv[0].endswith("__main__.py"):  # this is a python module
+        module_name = os.path.basename(os.path.dirname(sys_argv[0]))
+        cmds = [sys.executable, '-m', module_name] + sys_argv[1:]
     else:
         cmds = [sys.executable] + sys_argv
 
@@ -1683,20 +1709,24 @@ cm_global.register_api('cm.try-install-custom-node', confirm_try_install)
 async def default_cache_update():
     channel_url = core.get_config()['channel_url']
     async def get_cache(filename):
-        if core.get_config()['default_cache_as_channel_url']:
-            uri = f"{channel_url}/{filename}"
-        else:
-            uri = f"{core.DEFAULT_CHANNEL}/{filename}"
+        try:
+            if core.get_config()['default_cache_as_channel_url']:
+                uri = f"{channel_url}/{filename}"
+            else:
+                uri = f"{core.DEFAULT_CHANNEL}/{filename}"
 
-        cache_uri = str(manager_util.simple_hash(uri)) + '_' + filename
-        cache_uri = os.path.join(manager_util.cache_dir, cache_uri)
+            cache_uri = str(manager_util.simple_hash(uri)) + '_' + filename
+            cache_uri = os.path.join(manager_util.cache_dir, cache_uri)
 
-        json_obj = await manager_util.get_data(uri, True)
+            json_obj = await manager_util.get_data(uri, True)
 
-        with manager_util.cache_lock:
-            with open(cache_uri, "w", encoding='utf-8') as file:
-                json.dump(json_obj, file, indent=4, sort_keys=True)
-                logging.info(f"[ComfyUI-Manager] default cache updated: {uri}")
+            with manager_util.cache_lock:
+                with open(cache_uri, "w", encoding='utf-8') as file:
+                    json.dump(json_obj, file, indent=4, sort_keys=True)
+                    logging.info(f"[ComfyUI-Manager] default cache updated: {uri}")
+        except Exception as e:
+            logging.error(f"[ComfyUI-Manager] Failed to perform initial fetching '{filename}': {e}")
+            traceback.print_exc()
 
     if core.get_config()['network_mode'] != 'offline':
         a = get_cache("custom-node-list.json")
