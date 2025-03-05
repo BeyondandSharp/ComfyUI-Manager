@@ -80,6 +80,7 @@ def aria2_download_url(model_url: str, dir_remote: str, dir_net: str, model_dir:
     import manager_core as core
     import tqdm
     import time
+    import json
 
     if model_dir.startswith(core.comfy_path):
         model_dir = model_dir[len(core.comfy_path) :]
@@ -97,14 +98,13 @@ def aria2_download_url(model_url: str, dir_remote: str, dir_net: str, model_dir:
 
     download = aria2_find_task(download_dir_remote, filename)
     if download is None:
+        token_path = os.environ['TOKEN_PATH']
+        # 读取token.json
+        with open(token_path, 'r') as f:
+            token = json.load(f)
         if model_url.startswith('https://huggingface.co'):
-            token_path = os.environ['TOKEN_PATH']
-            # 读取token
-            with open(token_path, 'r') as f:
-                token = f.read()
-            headers = ["Authorization: Bearer " + token]
+            headers = ["Authorization: Bearer " + token['huggingface']]
         options = {'dir': download_dir_remote, 'out': filename, 'header': headers}
-        #options['header'] = [f"{k}: {v}" for k, v in headers.items()]
         download = aria2.add(model_url, options)[0]
 
     if download.is_active:
