@@ -56,8 +56,15 @@ def download_url(model_url: str, model_dir: str, filename: str):
     if HF_ENDPOINT:
         model_url = model_url.replace('https://huggingface.co', HF_ENDPOINT)
         logging.info(f"model_url replaced by HF_ENDPOINT, new = {model_url}")
+    max_retry = 5
+    retry = 0
     if aria2:
-        return aria2_download_url(model_url, dir_remote, dir_net, model_dir, filename)
+        while retry < max_retry:
+            try:
+                return aria2_download_url(model_url, dir_remote, dir_net, model_dir, filename)
+            except Exception as e:
+                logging.error(f"Download error: {model_url} / {e}")
+                retry += 1
     else:
         from torchvision.datasets.utils import download_url as torchvision_download_url
         return torchvision_download_url(model_url, model_dir, filename)
@@ -86,6 +93,7 @@ def aria2_download_url(model_url: str, dir_remote: str, dir_net: str, model_dir:
         model_dir = model_dir[len(core.comfy_path) :]
 
     download_dir = model_dir if model_dir.startswith('/') else os.path.join('/models', model_dir)
+    download_dir = os.path.normpath(download_dir)
     print(f"download_dir: {download_dir}")
     # 如果download_dir是绝对路径，则删除开头与comfy_base_path相同的部分，忽略大小写
     if download_dir.lower().startswith(core.comfy_path.lower()):
@@ -97,14 +105,20 @@ def aria2_download_url(model_url: str, dir_remote: str, dir_net: str, model_dir:
     print(f"download_dir_remote: {download_dir_remote}")
 
     download = aria2_find_task(download_dir_remote, filename)
-    if download is None:
+    if download is None or download.has_failed:
         token_path = os.environ['TOKEN_PATH']
         # 读取token.json
         with open(token_path, 'r') as f:
             token = json.load(f)
+        headers = []
         if model_url.startswith('https://huggingface.co'):
             headers = ["Authorization: Bearer " + token['huggingface']]
+        elif model_url.startswith('https://civitai.com'):
+            headers = {"Authorization": f"Bearer {token['civitai']}"}
+            model_url = requests.head(model_url, headers=headers, allow_redirects=True).url
+            headers = []
         options = {'dir': download_dir_remote, 'out': filename, 'header': headers}
+        print(f"model_url: {model_url}")
         download = aria2.add(model_url, options)[0]
 
     if download.is_active:
@@ -122,19 +136,21 @@ def aria2_download_url(model_url: str, dir_remote: str, dir_net: str, model_dir:
                 time.sleep(1)
                 download.update()
 
-    # 下载完成行为
     if download.is_complete:
         download_dir_net = os.path.join(dir_net, download_dir_rel[1:])
         download_dir_net = download_dir_net.replace("\\", "/")
         print(f"download_dir_net: {download_dir_net}")
         if not os.path.exists(download_dir):
             os.makedirs(download_dir)
-        file_net = os.path.join(download_dir_net, filename)
-        file_local = os.path.join(download_dir, filename)
+        file_net = os.path.normpath(os.path.join(download_dir_net, filename))
+        file_local = os.path.normpath(os.path.join(download_dir, filename))
         print(f"file_net: {file_net}")
         print(f"file_local: {file_local}")
         shutil.copy2(file_net, file_local)
+        return file_local
 
+    if download.has_failed:
+        raise Exception(f"Download failed: {model_url}")
 
 
 def download_url_with_agent(url, save_path):

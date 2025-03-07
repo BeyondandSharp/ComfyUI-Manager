@@ -2174,11 +2174,31 @@ def git_pull(path):
 
     return True
 
+def json_merge(json_obj, json_obj_custom):
+        for key, value in json_obj_custom.items():
+            print('merge', key)
+            if key not in json_obj:
+                # if key is not in json_obj, just add it
+                json_obj[key] = value
+            else:
+                models_dict = {}
+                for item in json_obj.get(key, []):
+                    if "reference" in item:
+                        models_dict[item["reference"]] = item
+
+                for item in json_obj_custom[key]:
+                    if "reference" in item:
+                        models_dict[item["reference"]] = item
+                    else:
+                        json_obj[key].append(item)
+                json_obj[key] = list(models_dict.values())
+
+        return json_obj
 
 async def get_data_by_mode(mode, filename, channel_url=None):
-    print(f"mode: {mode} filename: {filename} channel_url: {channel_url}")
     if channel_url in get_channel_dict():
         channel_url = get_channel_dict()[channel_url]
+    print(f"mode: {mode} filename: {filename} channel_url: {channel_url}")
 
     try:
         local_uri = os.path.join(manager_util.comfyui_manager_path, filename)
@@ -2218,31 +2238,28 @@ async def get_data_by_mode(mode, filename, channel_url=None):
         uri = os.path.join(manager_util.comfyui_manager_path, filename)
         json_obj = await manager_util.get_data(uri)
     
-    # load CUSTOMNODEDB from env
-    if 'CUSTOMNODEDB' in os.environ:
-        custom_node_db = os.environ['CUSTOMNODEDB']
-        uri = os.path.join(custom_node_db, filename)
-        if os.path.exists(uri):
-            json_obj_custom = await manager_util.get_data(uri)
-            # json merge
-            json_obj_merge = copy.deepcopy(json_obj)
-            for key, value in json_obj_custom.items():
-                print('merge', filename, key)
-                if key not in json_obj_merge:
-                    continue
-                else:
-                    models_dict = {}
-                    for item in json_obj_merge.get(key, []):
-                        if "reference" in item:
-                            models_dict[item["reference"]] = item
-
-                    for item in json_obj_custom[key]:
-                        if "reference" in item:
-                            models_dict[item["reference"]] = item
-                        else:
-                            json_obj_merge[key].append(item)
-                    json_obj_merge[key] = list(models_dict.values())
-            json_obj = json_obj_merge
+    # load CUSTOMNODEDB_PATH from env
+    if 'CUSTOMNODEDB_PATH' in os.environ:
+        print(f"Merge json from {os.environ['CUSTOMNODEDB_PATH']}")
+        custom_node_db_paths = os.environ['CUSTOMNODEDB_PATH'].split(';')
+        json_obj_merge = copy.deepcopy(json_obj)
+        
+        for custom_node_db in custom_node_db_paths:
+            custom_node_db = custom_node_db.strip()
+            if not custom_node_db:
+                continue
+                
+            uri = os.path.join(custom_node_db, filename)
+            if os.path.exists(uri):
+                print(f"Merge json from {uri}")
+                try:
+                    json_obj_custom = await manager_util.get_data(uri)
+                    # json merge
+                    json_obj_merge = json_merge(json_obj_merge, json_obj_custom)
+                except Exception as e:
+                    print(f"Error loading data from {uri}: {e}")
+                    
+        json_obj = json_obj_merge
 
     return json_obj
 
