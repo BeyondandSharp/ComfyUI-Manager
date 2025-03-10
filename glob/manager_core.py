@@ -25,6 +25,7 @@ import yaml
 import zipfile
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import toml
 
 orig_print = print
 
@@ -45,7 +46,7 @@ from node_package import InstalledNodePackage
 from packaging import version
 
 
-version_code = [3, 28]
+version_code = [3, 30, 2]
 version_str = f"V{version_code[0]}.{version_code[1]}" + (f'.{version_code[2]}' if len(version_code) > 2 else '')
 
 
@@ -82,6 +83,24 @@ def get_comfyui_tag():
         return repo.git.describe('--tags')
     except:
         return None
+
+
+def get_current_comfyui_ver():
+    """
+    Extract version from pyproject.toml
+    """
+    toml_path = os.path.join(comfy_path, 'pyproject.toml')
+    if not os.path.exists(toml_path):
+        return None
+    else:
+        try:
+            with open(toml_path, "r", encoding="utf-8") as f:
+                data = toml.load(f)
+
+                project = data.get('project', {})
+                return project.get('version')
+        except:
+            return None
 
 
 def get_script_env():
@@ -157,7 +176,7 @@ def check_invalid_nodes():
 
 
 # read env vars
-comfy_path = os.environ.get('COMFYUI_PATH')
+comfy_path: str = os.environ.get('COMFYUI_PATH')
 comfy_base_path = os.environ.get('COMFYUI_FOLDERS_BASE_PATH')
 
 if comfy_path is None:
@@ -831,7 +850,7 @@ class UnifiedManager:
         else:
             if os.path.exists(requirements_path) and not no_deps:
                 print("Install: pip packages")
-                pip_fixer = manager_util.PIPFixer(manager_util.get_installed_packages(), comfy_path)
+                pip_fixer = manager_util.PIPFixer(manager_util.get_installed_packages(), comfy_path, manager_files_path)
                 res = True
                 lines = manager_util.robust_readlines(requirements_path)
                 for line in lines:
@@ -1900,7 +1919,7 @@ def execute_install_script(url, repo_path, lazy_mode=False, instant_execution=Fa
     else:
         if os.path.exists(requirements_path) and not no_deps:
             print("Install: pip packages")
-            pip_fixer = manager_util.PIPFixer(manager_util.get_installed_packages(), comfy_path)
+            pip_fixer = manager_util.PIPFixer(manager_util.get_installed_packages(), comfy_path, manager_files_path)
             with open(requirements_path, "r") as requirements_file:
                 for line in requirements_file:
                     #handle comments

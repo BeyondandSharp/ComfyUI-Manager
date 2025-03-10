@@ -507,7 +507,7 @@ check_bypass_ssl()
 # Perform install
 processed_install = set()
 script_list_path = os.path.join(folder_paths.user_directory, "default", "ComfyUI-Manager", "startup-scripts", "install-scripts.txt")
-pip_fixer = manager_util.PIPFixer(manager_util.get_installed_packages(), comfy_path)
+pip_fixer = manager_util.PIPFixer(manager_util.get_installed_packages(), comfy_path, manager_files_path)
 
 
 def is_installed(name):
@@ -823,7 +823,10 @@ if script_executed:
     else:
         sys_argv = sys.argv.copy()
 
-        if sys.platform.startswith('win32'):
+        if sys_argv[0].endswith("__main__.py"):  # this is a python module
+            module_name = os.path.basename(os.path.dirname(sys_argv[0]))
+            cmds = [sys.executable, '-m', module_name] + sys_argv[1:]
+        elif sys.platform.startswith('win32'):
             cmds = ['"' + sys.executable + '"', '"' + sys_argv[0] + '"'] + sys_argv[1:]
         else:
             cmds = [sys.executable] + sys_argv
