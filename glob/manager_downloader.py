@@ -10,11 +10,7 @@ import shutil
 
 aria2 = os.getenv('COMFYUI_MANAGER_ARIA2_SERVER')
 HF_ENDPOINT = os.getenv('HF_ENDPOINT')
-dir_remote = os.getenv('COMFYUI_MANAGER_DIR_REMOTE')
-dir_net = os.getenv('COMFYUI_MANAGER_DIR_NET')
 print(f"aria2: {aria2}")
-print(f"dir_remote: {dir_remote}")
-print(f"dir_net: {dir_net}")
 
 
 if aria2 is not None:
@@ -61,6 +57,10 @@ def download_url(model_url: str, model_dir: str, filename: str):
     if aria2:
         while retry < max_retry:
             try:
+                dir_remote = os.getenv('COMFYUI_MANAGER_DIR_REMOTE')
+                dir_net = os.getenv('COMFYUI_MANAGER_DIR_NET')
+                print(f"dir_remote: {dir_remote}")
+                print(f"dir_net: {dir_net}")
                 return aria2_download_url(model_url, dir_remote, dir_net, model_dir, filename)
             except Exception as e:
                 logging.error(f"Download error: {model_url} / {e}")
@@ -82,47 +82,29 @@ def aria2_find_task(dir: str, filename: str):
             if str(file.path) == target:
                 return download
 
-
-def aria2_download_url(model_url: str, dir_remote: str, dir_net: str, model_dir: str, filename: str):
-    import manager_core as core
-    import tqdm
-    import time
+def aria2_download_add(model_url: str, download_dir: str, filename: str):
     import json
 
-    if model_dir.startswith(core.comfy_path):
-        model_dir = model_dir[len(core.comfy_path) :]
-
-    download_dir = model_dir if model_dir.startswith('/') else os.path.join('/models', model_dir)
-    download_dir = os.path.normpath(download_dir)
-    print(f"download_dir: {download_dir}")
-    # 如果download_dir是绝对路径，则删除开头与comfy_base_path相同的部分，忽略大小写
-    if download_dir.lower().startswith(core.comfy_path.lower()):
-        download_dir_rel = download_dir[len(core.comfy_path):]
-    else :
-        download_dir_rel = download_dir
-    print(f"download_dir_rel: {download_dir_rel}")
-    download_dir_remote = os.path.join(dir_remote, download_dir_rel[1:])
-    print(f"download_dir_remote: {download_dir_remote}")
-
-    download = aria2_find_task(download_dir_remote, filename)
-    if download is None or download.has_failed:
-        token_path = os.environ['TOKEN_PATH']
-        # 读取token.json
-        with open(token_path, 'r') as f:
-            token = json.load(f)
+    token_path = os.environ['TOKEN_PATH']
+    # 读取token.json
+    with open(token_path, 'r') as f:
+        token = json.load(f)
+    headers = []
+    if model_url.startswith('https://huggingface.co'):
+        headers = ["Authorization: Bearer " + token['huggingface']]
+    elif model_url.startswith('https://civitai.com'):
+        headers = {"Authorization": f"Bearer {token['civitai']}"}
+        model_url = requests.head(model_url, headers=headers, allow_redirects=True).url
         headers = []
-        if model_url.startswith('https://huggingface.co'):
-            headers = ["Authorization: Bearer " + token['huggingface']]
-        elif model_url.startswith('https://civitai.com'):
-            headers = {"Authorization": f"Bearer {token['civitai']}"}
-            model_url = requests.head(model_url, headers=headers, allow_redirects=True).url
-            headers = []
-        options = {'dir': download_dir_remote, 'out': filename, 'header': headers}
-        print(f"model_url: {model_url}")
-        download = aria2.add(model_url, options)[0]
+    options = {'dir': download_dir, 'out': filename, 'header': headers}
+    
+    return aria2.add(model_url, options)[0]
 
-    if download.is_active:
-        with tqdm.tqdm(
+def aria2_download_update(download, filename: str):
+    import tqdm
+    import time
+
+    with tqdm.tqdm(
             total=download.total_length,
             bar_format='{l_bar}{bar}{r_bar}',
             desc=filename,
@@ -136,18 +118,31 @@ def aria2_download_url(model_url: str, dir_remote: str, dir_net: str, model_dir:
                 time.sleep(1)
                 download.update()
 
+def aria2_download_complete(dir_remote: str, dir_net :str, model_dir: str, filename: str):
+    download_dir_net = get_download_path("download_dir_net", dir_remote, dir_net, model_dir)
+    download_dir = get_download_path(path_id="download_dir", model_dir=model_dir)
+    if not os.path.exists(download_dir):
+        os.makedirs(download_dir)
+    file_net = os.path.normpath(os.path.join(download_dir_net, filename))
+    file_local = os.path.normpath(os.path.join(download_dir, filename))
+    shutil.copy2(file_net, file_local)
+    print(f"copy2: {file_net} -> {file_local}")
+    return file_local
+
+def aria2_download_url(model_url: str, dir_remote: str, dir_net: str, model_dir: str, filename: str):
+
+    download_dir_remote = get_download_path(path_id="download_dir_remote", dir_remote=dir_remote, model_dir=model_dir)
+
+    download = aria2_find_task(download_dir_remote, filename)
+
+    if download is None or download.has_failed:
+        download = aria2_download_add(model_url, download_dir_remote, filename)
+
+    if download.is_active:
+        aria2_download_update(download, filename)
+
     if download.is_complete:
-        download_dir_net = os.path.join(dir_net, download_dir_rel[1:])
-        download_dir_net = download_dir_net.replace("\\", "/")
-        print(f"download_dir_net: {download_dir_net}")
-        if not os.path.exists(download_dir):
-            os.makedirs(download_dir)
-        file_net = os.path.normpath(os.path.join(download_dir_net, filename))
-        file_local = os.path.normpath(os.path.join(download_dir, filename))
-        print(f"file_net: {file_net}")
-        print(f"file_local: {file_local}")
-        shutil.copy2(file_net, file_local)
-        return file_local
+        return aria2_download_complete(dir_remote, dir_net, model_dir, filename)
 
     if download.has_failed:
         raise Exception(f"Download failed: {model_url}")
@@ -207,4 +202,31 @@ def download_repo_in_bytes(repo_id, local_dir):
 
     pbar.close()
 
+def get_download_path(path_id: str, dir_remote: str = None, dir_net: str = None, model_dir: str = None):
+    """ 
+    dir_remote: E:/MCS/ComfyUI
+    dir_net: //192.168.0.100/mcs/ComfyUI
+    model_dir: D:/ComfyUI/models/model_type/base; /models/model_type/base; /model_type/base
+    download_dir: D:/ComfyUI/models/model_type/base; /models/model_type/base
+    download_dir_rel: /models/model_type/base
+    download_dir_remote: E:/MCS/ComfyUI/models/model_type/base
+    download_dir_net: //192.168.0.100/mcs/ComfyUI/models/model_type/base
+    """
 
+    import manager_core as core
+
+    if model_dir.lower().startswith(core.comfy_path.lower()):
+        download_dir_rel = model_dir[len(core.comfy_path) :]
+    download_dir_rel = os.path.normpath(download_dir_rel)
+
+    download_dir_rel = download_dir_rel if download_dir_rel.startswith('/') else os.path.join('/models', download_dir_rel)
+    download_dir_rel = os.path.normpath(download_dir_rel)
+
+    if path_id == "download_dir":
+        return os.path.normpath(model_dir)
+    if path_id == "download_dir_rel":
+        return download_dir_rel
+    if path_id == "download_dir_remote":
+        return os.path.join(dir_remote, download_dir_rel[1:])
+    if path_id == "download_dir_net":
+        return os.path.normpath(os.path.join(dir_net, download_dir_rel[1:]))
