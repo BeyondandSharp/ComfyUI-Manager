@@ -537,60 +537,71 @@ async def task_worker():
         model_path = get_model_path(json_data)
         model_url = json_data['url']
 
-        res = False
+        def model_install(model_url: str):
+            res = False
 
-        try:
-            if model_path is not None:
-                logging.info(f"Install model '{json_data['name']}' from '{model_url}' into '{model_path}'")
+            try:
+                if model_path is not None:
+                    logging.info(f"Install model '{json_data['name']}' from '{model_url}' into '{model_path}'")
 
-                if json_data['filename'] == '<huggingface>':
-                    if os.path.exists(os.path.join(model_path, os.path.dirname(json_data['url']))):
-                        logging.error(f"[ComfyUI-Manager] the model path already exists: {model_path}")
-                        return f"The model path already exists: {model_path}"
+                    if json_data['filename'] == '<huggingface>':
+                        if os.path.exists(os.path.join(model_path, os.path.dirname(json_data['url']))):
+                            logging.error(f"[ComfyUI-Manager] the model path already exists: {model_path}")
+                            return f"The model path already exists: {model_path}"
 
-                    logging.info(f"[ComfyUI-Manager] Downloading '{model_url}' into '{model_path}'")
-                    manager_downloader.download_repo_in_bytes(repo_id=model_url, local_dir=model_path)
+                        logging.info(f"[ComfyUI-Manager] Downloading '{model_url}' into '{model_path}'")
+                        manager_downloader.download_repo_in_bytes(repo_id=model_url, local_dir=model_path)
 
-                    return 'success'
-
-                elif not core.get_config()['model_download_by_agent'] and (
-                        model_url.startswith('https://github.com') or model_url.startswith('https://huggingface.co') or model_url.startswith('https://heibox.uni-heidelberg.de')) or model_url.startswith('https://civitai.com'):
-                    model_dir = get_model_dir(json_data, True)
-                    download_url(model_url, model_dir, filename=json_data['filename'])
-                    if model_path.endswith('.zip'):
-                        res = core.unzip(model_path)
-                    else:
-                        res = True
-
-                    if res:
                         return 'success'
-                # 如果model_url没有://或不是file://开头，则直接复制到model_dir
-                elif not "://" in model_url:
-                    model_dir = get_model_dir(json_data, True)
-                    file_local = os.path.join(model_dir, json_data['filename'])
-                    print('copy', model_url, 'to', file_local)
-                    try:
-                        shutil.copy2(model_url, file_local)
+
+                    elif not core.get_config()['model_download_by_agent'] and (
+                            model_url.startswith('https://github.com') or model_url.startswith('https://huggingface.co') or model_url.startswith('https://heibox.uni-heidelberg.de')) or model_url.startswith('https://civitai.com'):
+                        model_dir = get_model_dir(json_data, True)
+                        download_url(model_url, model_dir, filename=json_data['filename'])
                         if model_path.endswith('.zip'):
                             res = core.unzip(model_path)
                         else:
                             res = True
-                    except Exception as e:
-                        print(f"Error: {e}")
+
+                        if res:
+                            return 'success'
+                    # 如果model_url没有://或不是file://开头，则直接复制到model_dir
+                    elif not "://" in model_url:
+                        model_dir = get_model_dir(json_data, True)
+                        file_local = os.path.join(model_dir, json_data['filename'])
+                        print('copy', model_url, 'to', file_local)
+                        try:
+                            shutil.copy2(model_url, file_local)
+                            if model_path.endswith('.zip'):
+                                res = core.unzip(model_path)
+                            else:
+                                res = True
+                        except Exception as e:
+                            print(f"Error: {e}")
+                    else:
+                        res = download_url_with_agent(model_url, model_path)
+                        if res and model_path.endswith('.zip'):
+                            res = core.unzip(model_path)
                 else:
-                    res = download_url_with_agent(model_url, model_path)
-                    if res and model_path.endswith('.zip'):
-                        res = core.unzip(model_path)
-            else:
-                logging.error(f"[ComfyUI-Manager] Model installation error: invalid model type - {json_data['type']}")
+                    logging.error(f"[ComfyUI-Manager] Model installation error: invalid model type - {json_data['type']}")
 
-            if res:
-                return 'success'
+                if res:
+                    return 'success'
 
-        except Exception as e:
-            logging.error(f"[ComfyUI-Manager] ERROR: {e}", file=sys.stderr)
+            except Exception as e:
+                logging.error(f"[ComfyUI-Manager] ERROR: {e}", file=sys.stderr)
 
-        return f"Model installation error: {model_url}"
+            return f"Model installation error: {model_url}"
+        
+        # 如果model_url为数组
+        if isinstance(model_url, list):
+            for url in model_url:
+                res = model_install(url)
+                if res != 'success':
+                    return res
+            return 'success'
+        else:
+            return model_install(model_url)
 
     stats = {}
 
