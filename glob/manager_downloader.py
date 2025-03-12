@@ -119,6 +119,7 @@ def aria2_download_update(download, filename: str):
                 download.update()
 
 def aria2_download_complete(dir_remote: str, dir_net :str, model_dir: str, filename: str):
+    print(f"{filename} download complete, copy start")
     download_dir_net = get_download_path("download_dir_net", dir_remote, dir_net, model_dir)
     download_dir = get_download_path(path_id="download_dir", model_dir=model_dir)
     if not os.path.exists(download_dir):

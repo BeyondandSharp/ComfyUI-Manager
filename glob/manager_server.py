@@ -554,7 +554,7 @@ async def task_worker():
                     return 'success'
 
                 elif not core.get_config()['model_download_by_agent'] and (
-                        model_url.startswith('https://github.com') or model_url.startswith('https://huggingface.co') or model_url.startswith('https://heibox.uni-heidelberg.de')):
+                        model_url.startswith('https://github.com') or model_url.startswith('https://huggingface.co') or model_url.startswith('https://heibox.uni-heidelberg.de')) or model_url.startswith('https://civitai.com'):
                     model_dir = get_model_dir(json_data, True)
                     download_url(model_url, model_dir, filename=json_data['filename'])
                     if model_path.endswith('.zip'):
