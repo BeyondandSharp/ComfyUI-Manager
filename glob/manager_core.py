@@ -2202,12 +2202,12 @@ def json_merge(json_obj, json_obj_custom):
             else:
                 models_dict = {}
                 for item in json_obj.get(key, []):
-                    if "reference" in item:
-                        models_dict[item["reference"]] = item
+                    if "url" in item:
+                        models_dict[item["url"]] = item
 
                 for item in json_obj_custom[key]:
-                    if "reference" in item:
-                        models_dict[item["reference"]] = item
+                    if "url" in item:
+                        models_dict[item["url"]] = item
                     else:
                         json_obj[key].append(item)
                 json_obj[key] = list(models_dict.values())
