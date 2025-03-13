@@ -1265,16 +1265,15 @@ async def install_custom_node(request):
     custom_nodes = await core.unified_manager.get_custom_nodes(json_data['channel'], json_data['mode'])
     
     node_spec = core.unified_manager.resolve_node_spec(node_spec_str)
-    print("node_spec", node_spec)
+
     if node_spec is None:
         logging.error(f"Cannot resolve install target: '{node_spec_str}'")
         return f"Cannot resolve install target: '{node_spec_str}'"
 
     node_name, version_spec, is_specified = node_spec
     the_node = custom_nodes.get(node_name)
-    print("the_node", the_node)
+
     req_models = the_node.get('req_models', None)
-    print("req_models", req_models)
 
     # req_models install
     if req_models != [] and req_models is not None:
