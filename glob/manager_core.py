@@ -2193,37 +2193,41 @@ def git_pull(path):
 
     return True
 
-def json_merge(json_obj, json_obj_custom):
-        for key, value in json_obj_custom.items():
+def json_merge(json_obj, json_obj_append):
+        for key, value in json_obj_append.items():
             print('merge', key)
             if key not in json_obj:
                 # if key is not in json_obj, just add it
                 json_obj[key] = value
             else:
-                models_dict = {}
+                json_dict = {}
                 for item in json_obj.get(key, []):
-                    item_id = None
-                    if "name" in item and "reference" in item:
-                        item_id = f"{item['name']}:{item['reference']}"
-                    if item_id:
-                        models_dict[item_id] = item
+                    id = item.get('id', item.get('name', item.get('title', None)))
+                    reference = item.get('reference', None)
 
-                for item in json_obj_custom[key]:
-                    item_id = None
-                    if "name" in item and "reference" in item:
-                        item_id = f"{item['name']}:{item['reference']}"
-                    if item_id:
+                    item_id = f"{id}:{reference}"
+
+                    if id and reference:
+                        json_dict[item_id] = item
+
+                for item in json_obj_append[key]:
+                    id = item.get('id', item.get('name', item.get('title', None)))
+                    reference = item.get('reference', None)
+
+                    item_id = f"{id}:{reference}"
+
+                    if id and reference:
                     # 如果项目已存在，合并其属性而不是简单替换
-                        if item_id in models_dict:
+                        if item_id in json_dict:
                             # 合并项目的所有属性，保持已有值不变，添加新属性
                             for attr_key, attr_value in item.items():
-                                if attr_key not in models_dict[item_id]:
-                                    models_dict[item_id][attr_key] = attr_value
+                                if attr_key not in json_dict[item_id]:
+                                    json_dict[item_id][attr_key] = attr_value
                         else:
                         # 新项目直接添加
-                            models_dict[item_id] = item
+                            json_dict[item_id] = item
 
-                json_obj[key] = list(models_dict.values())
+                json_obj[key] = list(json_dict.values())
 
         return json_obj
 

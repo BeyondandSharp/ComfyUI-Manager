@@ -1260,6 +1260,45 @@ async def install_custom_node(request):
     install_item = json_data.get('ui_id'), node_spec_str, json_data['channel'], json_data['mode'], skip_post_install
     task_queue.put(("install", install_item))
 
+    # get req_models
+    print("get req_models")
+    custom_nodes = await core.unified_manager.get_custom_nodes(json_data['channel'], json_data['mode'])
+    
+    node_spec = core.unified_manager.resolve_node_spec(node_spec_str)
+    print("node_spec", node_spec)
+    if node_spec is None:
+        logging.error(f"Cannot resolve install target: '{node_spec_str}'")
+        return f"Cannot resolve install target: '{node_spec_str}'"
+
+    node_name, version_spec, is_specified = node_spec
+    the_node = custom_nodes.get(node_name)
+    print("the_node", the_node)
+    req_models = the_node.get('req_models', None)
+    print("req_models", req_models)
+
+    # req_models install
+    if req_models != [] and req_models is not None:
+        json_obj = await core.get_data_by_mode(json_data['mode'], 'model-list.json', json_data['channel'])
+        for model in req_models:
+            name = model.get('name', None)
+            reference = model.get('reference', None)
+            if name is not None and reference is not None:
+                from hashlib import md5
+                models_dict = {}
+                for item in json_obj.get("models", []):
+                    item_id = None
+                    if "name" in item and "reference" in item:
+                        item_id = f"{item['name']}:{item['reference']}"
+                    if item_id:
+                        models_dict[item_id] = item
+                item_id = f"{name}:{reference}"
+                model = models_dict[item_id]
+                ui_id = md5((model["name"] + model["reference"]).encode('utf-8'))
+                
+            install_item = ui_id, model
+            print(f"Add task {model["name"]}")
+            task_queue.put(("install-model", install_item))
+
     return web.Response(status=200)
 
 
