@@ -2202,14 +2202,27 @@ def json_merge(json_obj, json_obj_custom):
             else:
                 models_dict = {}
                 for item in json_obj.get(key, []):
-                    if "url" in item:
-                        models_dict[item["url"]] = item
+                    item_id = None
+                    if "name" in item and "reference" in item:
+                        item_id = f"{item['name']}:{item['reference']}"
+                    if item_id:
+                        models_dict[item_id] = item
 
                 for item in json_obj_custom[key]:
-                    if "url" in item:
-                        models_dict[item["url"]] = item
-                    else:
-                        json_obj[key].append(item)
+                    item_id = None
+                    if "name" in item and "reference" in item:
+                        item_id = f"{item['name']}:{item['reference']}"
+                    if item_id:
+                    # 如果项目已存在，合并其属性而不是简单替换
+                        if item_id in models_dict:
+                            # 合并项目的所有属性，保持已有值不变，添加新属性
+                            for attr_key, attr_value in item.items():
+                                if attr_key not in models_dict[item_id]:
+                                    models_dict[item_id][attr_key] = attr_value
+                        else:
+                        # 新项目直接添加
+                            models_dict[item_id] = item
+
                 json_obj[key] = list(models_dict.values())
 
         return json_obj
