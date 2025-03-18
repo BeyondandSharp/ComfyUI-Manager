@@ -279,8 +279,17 @@ def get_model_dir(data, show_log=False):
     else:
         models_base = folder_paths.models_dir
 
+    # NOTE: Validate to prevent path traversal.
+    if any(char in data['filename'] for char in {'/', '\\', ':'}):
+        return None
+
     def resolve_custom_node(save_path):
         save_path = save_path[13:] # remove 'custom_nodes/'
+
+        # NOTE: Validate to prevent path traversal.
+        if save_path.startswith(os.path.sep) or ':' in save_path:
+            return None
+
         repo_name = save_path.replace('\\','/').split('/')[0] # get custom node repo name
 
         # NOTE: The creation of files within the custom node path should be removed in the future.
@@ -399,7 +408,6 @@ async def task_worker():
 
         try:
             node_spec = core.unified_manager.resolve_node_spec(node_spec_str)
-
             if node_spec is None:
                 logging.error(f"Cannot resolve install target: '{node_spec_str}'")
                 return f"Cannot resolve install target: '{node_spec_str}'"
@@ -953,6 +961,7 @@ def check_model_installed(json_obj):
 
 @routes.get("/externalmodel/getlist")
 async def fetch_externalmodel_list(request):
+    # The model list is only allowed in the default channel, yet.
     json_obj = await core.get_data_by_mode(request.rel_url.query["mode"], 'model-list.json')
 
     check_model_installed(json_obj)
@@ -1221,9 +1230,8 @@ async def install_custom_node(request):
 
     git_url = None
 
-    if json_data['version'] != 'unknown':
-        selected_version = json_data.get('selected_version')
-
+    selected_version = json_data.get('selected_version')
+    if json_data['version'] != 'unknown' and selected_version != 'unknown':
         if skip_post_install:
             if cnr_id in core.unified_manager.nightly_inactive_nodes or cnr_id in core.unified_manager.cnr_inactive_nodes:
                 core.unified_manager.unified_enable(cnr_id)
@@ -1240,6 +1248,9 @@ async def install_custom_node(request):
             if git_url is None:
                 logging.error(f"[ComfyUI-Manager] Following node pack doesn't provide `nightly` version: ${git_url}")
                 return web.Response(status=404, text=f"Following node pack doesn't provide `nightly` version: ${git_url}")
+    elif json_data['version'] != 'unknown' and selected_version == 'unknown':
+        logging.error(f"[ComfyUI-Manager] Invalid installation request: {json_data}")
+        return web.Response(status=400, text="Invalid installation request")
     else:
         # unknown
         unknown_name = os.path.basename(json_data['files'][0])
@@ -1469,17 +1480,14 @@ async def disable_node(request):
     return web.Response(status=200)
 
 
-@routes.get("/manager/migrate_unmanaged_nodes")
-async def migrate_unmanaged_nodes(request):
-    logging.info("[ComfyUI-Manager] Migrating unmanaged nodes...")
-    await core.unified_manager.migrate_unmanaged_nodes()
-    logging.info("Done.")
-    return web.Response(status=200)
+async def check_whitelist_for_model(item):
+    json_obj = await core.get_data_by_mode('cache', 'model-list.json')
 
-
-@routes.get("/manager/need_to_migrate")
-async def need_to_migrate(request):
-    return web.Response(text=str(core.need_to_migrate), status=200)
+    for x in json_obj.get('models', []):
+        if x['save_path'] == item['save_path'] and x['base'] == item['base'] and x['filename'] == item['filename']:
+            return True
+        
+    return False
 
 
 @routes.post("/manager/queue/install_model")
@@ -1489,6 +1497,11 @@ async def install_model(request):
     if not is_allowed_security_level('middle'):
         logging.error(SECURITY_MESSAGE_MIDDLE_OR_BELOW)
         return web.Response(status=403, text="A security error has occurred. Please check the terminal logs")
+
+    # validate request
+    if not await check_whitelist_for_model(json_data):
+        logging.error(f"[ComfyUI-Manager] Invalid model install request is detected: {json_data}")
+        return web.Response(status=400, text="Invalid model install request is detected")
 
     if not json_data['filename'].endswith('.safetensors') and not is_allowed_security_level('high'):
         models_json = await core.get_data_by_mode('cache', 'model-list.json', 'default')
@@ -1607,26 +1620,27 @@ async def get_notice(request):
 
                 if match:
                     markdown_content = match.group(1)
-                    version_tag = core.get_comfyui_tag()
-                    if version_tag is None:
-                        version_tag = os.environ.get('__COMFYUI_DESKTOP_VERSION__')
-                        if version_tag is not None:
-                            markdown_content += f"<HR>ComfyUI: {version_tag} [Desktop]"
-                        else:
-                            markdown_content += f"<HR>ComfyUI: {core.comfy_ui_revision}[{comfy_ui_hash[:6]}]({core.comfy_ui_commit_datetime.date()})"
+                    version_tag = os.environ.get('__COMFYUI_DESKTOP_VERSION__')
+                    if version_tag is not None:
+                        markdown_content += f"<HR>ComfyUI: {version_tag} [Desktop]"
                     else:
-                        markdown_content += (f"<HR>ComfyUI: {version_tag}<BR>"
-                                             f"&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;({core.comfy_ui_commit_datetime.date()})")
+                        version_tag = core.get_comfyui_tag()
+                        if version_tag is None:
+                            markdown_content += f"<HR>ComfyUI: {core.comfy_ui_revision}[{comfy_ui_hash[:6]}]({core.comfy_ui_commit_datetime.date()})"
+                        else:
+                            markdown_content += (f"<HR>ComfyUI: {version_tag}<BR>"
+                                                 f"&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;({core.comfy_ui_commit_datetime.date()})")
                     # markdown_content += f"<BR>&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;()"
                     markdown_content += f"<BR>Manager: {core.version_str}"
 
                     markdown_content = add_target_blank(markdown_content)
 
                     try:
-                        if core.comfy_ui_commit_datetime == datetime(1900, 1, 1, 0, 0, 0):
-                            markdown_content = '<P style="text-align: center; color:red; background-color:white; font-weight:bold">Your ComfyUI isn\'t git repo.</P>' + markdown_content
-                        elif core.comfy_ui_required_commit_datetime.date() > core.comfy_ui_commit_datetime.date():
-                            markdown_content = '<P style="text-align: center; color:red; background-color:white; font-weight:bold">Your ComfyUI is too OUTDATED!!!</P>' + markdown_content
+                        if '__COMFYUI_DESKTOP_VERSION__' not in os.environ:
+                            if core.comfy_ui_commit_datetime == datetime(1900, 1, 1, 0, 0, 0):
+                                markdown_content = '<P style="text-align: center; color:red; background-color:white; font-weight:bold">Your ComfyUI isn\'t git repo.</P>' + markdown_content
+                            elif core.comfy_ui_required_commit_datetime.date() > core.comfy_ui_commit_datetime.date():
+                                markdown_content = '<P style="text-align: center; color:red; background-color:white; font-weight:bold">Your ComfyUI is too OUTDATED!!!</P>' + markdown_content
                     except:
                         pass
 
@@ -1756,6 +1770,7 @@ cm_global.register_api('cm.try-install-custom-node', confirm_try_install)
 
 
 async def default_cache_update():
+    core.refresh_channel_dict()
     channel_url = core.get_config()['channel_url']
     async def get_cache(filename):
         try:
@@ -1795,11 +1810,6 @@ async def default_cache_update():
 
     logging.info("[ComfyUI-Manager] All startup tasks have been completed.")
 
-    # NOTE: hide migration button temporarily.
-    # if not core.get_config()['skip_migration_check']:
-    #     await core.check_need_to_migrate()
-    # else:
-    #     logging.info("[ComfyUI-Manager] Migration check is skipped...")
 
 threading.Thread(target=lambda: asyncio.run(default_cache_update())).start()
 

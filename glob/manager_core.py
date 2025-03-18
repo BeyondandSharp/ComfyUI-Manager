@@ -46,7 +46,7 @@ from node_package import InstalledNodePackage
 from packaging import version
 
 
-version_code = [3, 30, 2]
+version_code = [3, 31, 4]
 version_str = f"V{version_code[0]}.{version_code[1]}" + (f'.{version_code[2]}' if len(version_code) > 2 else '')
 
 
@@ -55,6 +55,11 @@ DEFAULT_CHANNEL = "https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/ma
 
 default_custom_nodes_path = None
 
+
+class InvalidChannel(Exception):
+    def __init__(self, channel):
+        self.channel = channel
+        super().__init__(channel)
 
 def get_default_custom_nodes_path():
     global default_custom_nodes_path
@@ -78,8 +83,8 @@ def get_custom_nodes_paths():
 
 
 def get_comfyui_tag():
-    repo = git.Repo(comfy_path)
     try:
+        repo = git.Repo(comfy_path)
         return repo.git.describe('--tags')
     except:
         return None
@@ -254,6 +259,7 @@ comfy_ui_revision = "Unknown"
 comfy_ui_commit_datetime = datetime(1900, 1, 1, 0, 0, 0)
 
 channel_dict = None
+valid_channels = set()
 channel_list = None
 
 
@@ -358,7 +364,7 @@ def normalize_channel(channel):
     if channel_url:
         return channel_url
 
-    raise Exception(f"Invalid channel name '{channel}'")
+    raise InvalidChannel(channel)
 
 
 class ManagedResult:
@@ -765,6 +771,9 @@ class UnifiedManager:
 
     @staticmethod
     async def load_nightly(channel, mode):
+        if channel is None:
+            return {}
+
         res = {}
 
         channel_url = normalize_channel(channel)
@@ -772,6 +781,11 @@ class UnifiedManager:
             if mode not in ['remote', 'local', 'cache']:
                 print(f"[bold red]ERROR: Invalid mode is specified `--mode {mode}`[/bold red]", file=sys.stderr)
                 return {}
+
+        # validate channel - only the channel set by the user is allowed.
+        if channel_url not in valid_channels:
+            logging.error(f'[ComfyUI-Manager] An invalid channel was used: {channel_url}')
+            raise InvalidChannel(channel_url)
 
         json_obj = await get_data_by_mode(mode, 'custom-node-list.json', channel_url=channel_url)
         for x in json_obj['custom_nodes']:
@@ -790,9 +804,6 @@ class UnifiedManager:
         return res
 
     async def get_custom_nodes(self, channel, mode):
-        # default_channel = normalize_channel('default')
-        # cache = self.custom_node_map_cache.get((default_channel, mode)) # CNR/nightly should always be based on the default channel.
-
         channel = normalize_channel(channel)
         cache = self.custom_node_map_cache.get((channel, mode)) # CNR/nightly should always be based on the default channel.
 
@@ -800,7 +811,6 @@ class UnifiedManager:
             return cache
 
         channel = normalize_channel(channel)
-        print(f"nightly_channel: {channel}/{mode}")
         nodes = await self.load_nightly(channel, mode)
 
         res = {}
@@ -844,6 +854,7 @@ class UnifiedManager:
         install_script_path = os.path.join(repo_path, "install.py")
         requirements_path = os.path.join(repo_path, "requirements.txt")
 
+        res = True
         if lazy_mode:
             install_cmd = ["#LAZY-INSTALL-SCRIPT", sys.executable]
             return try_install_script(url, repo_path, install_cmd)
@@ -851,7 +862,6 @@ class UnifiedManager:
             if os.path.exists(requirements_path) and not no_deps:
                 print("Install: pip packages")
                 pip_fixer = manager_util.PIPFixer(manager_util.get_installed_packages(), comfy_path, manager_files_path)
-                res = True
                 lines = manager_util.robust_readlines(requirements_path)
                 for line in lines:
                     package_name = remap_pip_package(line.strip())
@@ -862,15 +872,14 @@ class UnifiedManager:
                             res = res and try_install_script(url, repo_path, install_cmd, instant_execution=instant_execution)
 
                 pip_fixer.fix_broken()
-                return res
 
             if os.path.exists(install_script_path) and install_script_path not in self.processed_install:
                 self.processed_install.add(install_script_path)
                 print("Install: install script")
                 install_cmd = [sys.executable, "install.py"]
-                return try_install_script(url, repo_path, install_cmd, instant_execution=instant_execution)
+                return res and try_install_script(url, repo_path, install_cmd, instant_execution=instant_execution)
 
-        return True
+        return res
 
     def reserve_cnr_switch(self, target, zip_url, from_path, to_path, no_deps, version_spec=None):
         script_path = os.path.join(manager_startup_script_path, "install-scripts.txt")
@@ -879,14 +888,6 @@ class UnifiedManager:
             file.write(f"{obj}\n")
 
         print(f"Installation reserved: {target}")
-
-        return True
-
-    def reserve_migration(self, moves):
-        script_path = os.path.join(manager_startup_script_path, "install-scripts.txt")
-        with open(script_path, "a") as file:
-            obj = ["", "#LAZY-MIGRATION", moves]
-            file.write(f"{obj}\n")
 
         return True
 
@@ -1418,7 +1419,11 @@ class UnifiedManager:
                 version_spec = self.resolve_unspecified_version(node_id)
 
         if version_spec == 'unknown' or version_spec == 'nightly':
-            custom_nodes = await self.get_custom_nodes(channel, mode)
+            try:
+                custom_nodes = await self.get_custom_nodes(channel, mode)
+            except InvalidChannel as e:
+                return ManagedResult('fail').fail(f'Invalid channel is used: {e.channel}')
+
             the_node = custom_nodes.get(node_id)
             if the_node is not None:
                 if version_spec == 'unknown':
@@ -1475,28 +1480,6 @@ class UnifiedManager:
             self.active_nodes[node_id] = version_spec, res.to_path
 
         return res
-
-    async def migrate_unmanaged_nodes(self):
-        """
-        fix path for nightly and unknown nodes of unmanaged nodes
-        """
-        await self.reload('cache')
-        await self.get_custom_nodes('default', 'cache')
-
-        print("Migration: STAGE 1")
-        moves = []
-
-        # migrate nightly inactive
-        for x, v in self.nightly_inactive_nodes.items():
-            if v.endswith('@nightly'):
-                continue
-
-            new_path = os.path.join(get_default_custom_nodes_path(), '.disabled', f"{x}@nightly")
-            moves.append((v, new_path))
-
-        self.reserve_migration(moves)
-
-        print("DONE (Migration reserved)")
 
 
 unified_manager = UnifiedManager()
@@ -1567,8 +1550,14 @@ def get_installed_node_packs():
     return res
 
 
+def refresh_channel_dict():
+    if channel_dict is None:
+        get_channel_dict()
+        
+
 def get_channel_dict():
     global channel_dict
+    global valid_channels
 
     if channel_dict is None:
         channel_dict = {}
@@ -1582,6 +1571,7 @@ def get_channel_dict():
                 channel_info = x.split("::")
                 if len(channel_info) == 2:
                     channel_dict[channel_info[0]] = channel_info[1]
+                    valid_channels.add(channel_info[1])
 
     return channel_dict
 
@@ -1634,7 +1624,6 @@ def write_config():
         'model_download_by_agent': get_config()['model_download_by_agent'],
         'downgrade_blacklist': get_config()['downgrade_blacklist'],
         'security_level': get_config()['security_level'],
-        'skip_migration_check': get_config()['skip_migration_check'],
         'always_lazy_install': get_config()['always_lazy_install'],
         'network_mode': get_config()['network_mode'],
         'db_mode': get_config()['db_mode'],
@@ -1673,7 +1662,6 @@ def read_config():
                     'windows_selector_event_loop_policy': get_bool('windows_selector_event_loop_policy', False),
                     'model_download_by_agent': get_bool('model_download_by_agent', False),
                     'downgrade_blacklist': default_conf.get('downgrade_blacklist', '').lower(),
-                    'skip_migration_check': get_bool('skip_migration_check', False),
                     'always_lazy_install': get_bool('always_lazy_install', False),
                     'network_mode': default_conf.get('network_mode', 'public').lower(),
                     'security_level': default_conf.get('security_level', 'normal').lower(),
@@ -1697,7 +1685,6 @@ def read_config():
             'windows_selector_event_loop_policy': False,
             'model_download_by_agent': False,
             'downgrade_blacklist': '',
-            'skip_migration_check': False,
             'always_lazy_install': False,
             'network_mode': 'public',   # public | private | offline
             'security_level': 'weak', # strong | normal | normal- | weak
@@ -2116,7 +2103,7 @@ async def gitclone_install(url, instant_execution=False, msg_prefix='', no_deps=
         cnr = unified_manager.get_cnr_by_repo(url)
         if cnr:
             cnr_id = cnr['id']
-            return await unified_manager.install_by_id(cnr_id, version_spec='nightly')
+            return await unified_manager.install_by_id(cnr_id, version_spec='nightly', channel='default', mode='cache')
         else:
             repo_name = os.path.splitext(os.path.basename(url))[0]
 
@@ -3217,22 +3204,22 @@ async def restore_snapshot(snapshot_path, git_helper_extras=None):
                 disabled_repos.append(x)
 
             for x in todo_enable:
-                res = unified_manager.unified_enable(x, 'nightly')
+                res = unified_manager.unified_enable(x[0], 'nightly')
 
                 is_switched = False
                 if res and res.target:
                     is_switched = repo_switch_commit(res.target, x[1])
 
                 if is_switched:
-                    checkout_repos.append(x)
+                    checkout_repos.append(f"{x[0]}@{x[1]}")
                 else:
-                    enabled_repos.append(x)
+                    enabled_repos.append(x[0])
 
             for x in todo_checkout:
                 is_switched = repo_switch_commit(x[0], x[1])
 
                 if is_switched:
-                    checkout_repos.append(x)
+                    checkout_repos.append(f"{x[0]}@{x[1]}")
                 else:
                     skip_node_packs.append(x[0])
 
@@ -3248,8 +3235,6 @@ async def restore_snapshot(snapshot_path, git_helper_extras=None):
             for x in processed_urls:
                 if x in git_info:
                     del git_info[x]
-
-            # remained nightly will be installed and migrated
 
     # for unknown restore
     todo_disable = []
@@ -3297,15 +3282,15 @@ async def restore_snapshot(snapshot_path, git_helper_extras=None):
             is_switched = repo_switch_commit(res.target, x[1])
 
         if is_switched:
-            checkout_repos.append(x)
+            checkout_repos.append(f"{x[0]}@{x[1]}")
         else:
-            enabled_repos.append(x)
+            enabled_repos.append(x[0])
 
     for x in todo_checkout:
         is_switched = repo_switch_commit(x[0], x[1])
 
         if is_switched:
-            checkout_repos.append(x)
+            checkout_repos.append(f"{x[0]}@{x[1]}")
         else:
             skip_node_packs.append(x[0])
 
@@ -3322,9 +3307,6 @@ async def restore_snapshot(snapshot_path, git_helper_extras=None):
         unified_manager.repo_install(repo_url, to_path, instant_execution=True, no_deps=False, return_postinstall=False)
         cloned_repos.append(repo_name)
 
-    # reload
-    await unified_manager.migrate_unmanaged_nodes()
-
     # print summary
     for x in cloned_repos:
         print(f"[ INSTALLED ] {x}")
@@ -3339,34 +3321,6 @@ async def restore_snapshot(snapshot_path, git_helper_extras=None):
 
     # if is_failed:
     #     print("[bold red]ERROR: Failed to restore snapshot.[/bold red]")
-
-
-# check need to migrate
-need_to_migrate = False
-
-
-async def check_need_to_migrate():
-    global need_to_migrate
-
-    await unified_manager.reload('cache')
-    await unified_manager.load_nightly(channel='default', mode='cache')
-
-    legacy_custom_nodes = []
-
-    for x in unified_manager.active_nodes.values():
-        if x[0] == 'nightly' and not x[1].endswith('@nightly'):
-            legacy_custom_nodes.append(x[1])
-
-    for x in unified_manager.nightly_inactive_nodes.values():
-        if not x.endswith('@nightly'):
-            legacy_custom_nodes.append(x)
-
-    if len(legacy_custom_nodes) > 0:
-        print("\n--------------------- ComfyUI-Manager migration notice --------------------")
-        print("The following custom nodes were installed using the old management method and require migration:\n")
-        print("\n".join(legacy_custom_nodes))
-        print("---------------------------------------------------------------------------\n")
-        need_to_migrate = True
 
 
 def get_comfyui_versions(repo=None):
