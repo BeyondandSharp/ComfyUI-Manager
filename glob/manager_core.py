@@ -2208,8 +2208,7 @@ def json_merge(json_obj, json_obj_append):
                         if item_id in json_dict:
                             # 合并项目的所有属性，保持已有值不变，添加新属性
                             for attr_key, attr_value in item.items():
-                                if attr_key not in json_dict[item_id]:
-                                    json_dict[item_id][attr_key] = attr_value
+                                json_dict[item_id][attr_key] = attr_value
                         else:
                         # 新项目直接添加
                             json_dict[item_id] = item
