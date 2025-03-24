@@ -11,6 +11,117 @@
 
         
         
+        
+        {
+            "author": "Dreamshot-io",
+            "title": "ComfyUI-Extend-Resolution",
+            "reference": "https://github.com/Dreamshot-io/ComfyUI-Extend-Resolution",
+            "files": [
+                "https://github.com/Dreamshot-io/ComfyUI-Extend-Resolution"
+            ],
+            "install_type": "git-clone",
+            "description": "NODES: Resolution Padding"
+        },
+        {
+            "author": "l1yongch1",
+            "title": "ComfyUI-YcNodes",
+            "reference": "https://github.com/l1yongch1/ComfyUI-YcNodes",
+            "files": [
+                "https://github.com/l1yongch1/ComfyUI-YcNodes"
+            ],
+            "install_type": "git-clone",
+            "description": "NODES: RemoveHighlightAndBlur, RoundedCorners, PaddingAccordingToBackground\npersonal custom nodes for learning"
+        },
+        {
+            "author": "vchopine",
+            "title": "ComfyUI_Toolbox",
+            "reference": "https://github.com/vchopine/ComfyUI_Toolbox",
+            "files": [
+                "https://github.com/vchopine/ComfyUI_Toolbox"
+            ],
+            "install_type": "git-clone",
+            "description": "Model & Aspect Ratio Selector Node for ComfyUI\nNOTE: The files in the repo are not organized."
+        },
+        {
+            "author": "Solankimayursinh",
+            "title": "PMSnodes",
+            "reference": "https://github.com/Solankimayursinh/PMSnodes",
+            "files": [
+                "https://github.com/Solankimayursinh/PMSnodes"
+            ],
+            "install_type": "git-clone",
+            "description": "A custom nodes for ComfyUI to Load audio in Base64 format and Send Audio to Websocket in Base64 Format for creating API of Audio related AI\nNOTE: The files in the repo are not organized."
+        },
+        {
+            "author": "rhinoflavored",
+            "title": "comfyui_QT",
+            "reference": "https://github.com/rhinoflavored/comfyui_QT",
+            "files": [
+                "https://github.com/rhinoflavored/comfyui_QT"
+            ],
+            "install_type": "git-clone",
+            "description": "bunch of image manipulation nodes....\nNOTE: The files in the repo are not organized."
+        },
+        {
+            "author": "ricklove",
+            "title": "ComfyUI-AutoSeg-SAM2",
+            "reference": "https://github.com/ricklove/ComfyUI-AutoSeg-SAM2",
+            "files": [
+                "https://github.com/ricklove/ComfyUI-AutoSeg-SAM2"
+            ],
+            "install_type": "git-clone",
+            "description": "NODES: AutoSeg-SAM2 Batch Segmentation"
+        },
+        {
+            "author": "JoeAu",
+            "title": "ComfyUI-PythonNode [UNSAFE]",
+            "reference": "https://github.com/JoeAu/ComfyUI-PythonNode",
+            "files": [
+                "https://github.com/JoeAu/ComfyUI-PythonNode"
+            ],
+            "install_type": "git-clone",
+            "description": "A custom ComfyUI node that allows users to execute arbitrary Python code with a single input (value) and output (result), enabling flexible processing of the input value using any Python code before assigning the final result to result. It also captures print() output and exceptions for debugging.[w/This node is an unsafe node that includes the capability to execute arbitrary python script.]"
+        },
+        {
+            "author": "smthemex",
+            "title": "ComfyUI_GPT_SoVITS_Lite",
+            "reference": "https://github.com/smthemex/ComfyUI_GPT_SoVITS_Lite",
+            "files": [
+                "https://github.com/smthemex/ComfyUI_GPT_SoVITS_Lite"
+            ],
+            "install_type": "git-clone",
+            "description": "[a/GPT_SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) infer only for ComfyUI users\nNOTE: The files in the repo are not organized."
+        },
+        {
+            "author": "Nambi24",
+            "title": "ComfyUI-Save_Image",
+            "reference": "https://github.com/Nambi24/ComfyUI-Save_Image",
+            "files": [
+               "https://github.com/Nambi24/ComfyUI-Save_Image"
+            ],
+            "description": "NODES: Save Image With Subfolder, Extract Last Path Component\nNOTE: The files in the repo are not organized.",
+            "install_type": "git-clone"
+        },
+        {
+            "author": "sugarkwork",
+            "title": "comfyui_image_crop",
+            "reference": "https://github.com/sugarkwork/comfyui_image_crop",
+            "files": [
+               "https://github.com/sugarkwork/comfyui_image_crop"
+            ],
+            "description": "NODES: CropTransparent, RestoreCrop, ExpandMultiple, CropReapply",
+            "install_type": "git-clone"
+        },
+        {
+            "author": "AkiEvansDev",
+            "title": "ComfyUI-Tools",
+            "reference": "https://github.com/AkiEvansDev/ComfyUI-Tools",
+            "files": [
+                "https://github.com/AkiEvansDev/ComfyUI-Tools"
+            ],
+            "install_type": "git-clone",
+            "description": "Custom nodes for basic actions."
+        },
         {
             "author": "silveroxides",
             "title": "ComfyUI-ModelUtils [WIP]",

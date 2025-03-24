@@ -35,11 +35,17 @@ def add_python_path_to_env():
 
 
 def make_pip_cmd(cmd):
-    if use_uv:
-        return [sys.executable, '-s', '-m', 'uv', 'pip'] + cmd
+    if 'python_embeded' in sys.executable:
+        if use_uv:
+            return [sys.executable, '-s', '-m', 'uv', 'pip'] + cmd
+        else:
+            return [sys.executable, '-s', '-m', 'pip'] + cmd
     else:
-        return [sys.executable, '-s', '-m', 'pip'] + cmd
-
+        # FIXED: https://github.com/ltdrdata/ComfyUI-Manager/issues/1667
+        if use_uv:
+            return [sys.executable, '-m', 'uv', 'pip'] + cmd
+        else:
+            return [sys.executable, '-m', 'pip'] + cmd
 
 # DON'T USE StrictVersion - cannot handle pre_release version
 # try:
@@ -439,10 +445,12 @@ class PIPFixer:
                     lines = file.readlines()
                 
                 front_line = next((line.strip() for line in lines if line.startswith('comfyui-frontend-package')), None)
-                cmd = make_pip_cmd(['install', front_line])
-                subprocess.check_output(cmd , universal_newlines=True)
-
-                logging.info("[ComfyUI-Manager] 'comfyui-frontend-package' dependency were fixed")
+                if front_line is None:
+                    logging.info("[ComfyUI-Manager] Skipped fixing the 'comfyui-frontend-package' dependency because the ComfyUI is outdated.")
+                else:
+                    cmd = make_pip_cmd(['install', front_line])
+                    subprocess.check_output(cmd , universal_newlines=True)
+                    logging.info("[ComfyUI-Manager] 'comfyui-frontend-package' dependency were fixed")
         except Exception as e:
             logging.error("[ComfyUI-Manager] Failed to restore comfyui-frontend-package")
             logging.error(e)
