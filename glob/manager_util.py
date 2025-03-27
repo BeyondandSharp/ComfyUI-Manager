@@ -24,6 +24,8 @@ cache_dir = os.path.join(comfyui_manager_path, '.cache')  # This path is also up
 
 use_uv = False
 
+if 'USE_UV' in os.environ:
+    use_uv = os.environ['USE_UV'].lower() == 'true'
 
 def add_python_path_to_env():
     if platform.system() != "Windows":
