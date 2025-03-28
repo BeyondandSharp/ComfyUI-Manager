@@ -72,6 +72,22 @@ class GitProgress(RemoteProgress):
         self.pbar.pos = 0
         self.pbar.refresh()
 
+def proxy_switcher(proxy:bool = False):
+    if os.environ.get('HTTP_PROXY') or os.environ.get('HTTPS_PROXY') or os.environ.get('NO_PROXY'):
+        http_proxy = os.environ.get('HTTP_PROXY')
+        https_proxy = os.environ.get('HTTPS_PROXY')
+        no_proxy = os.environ.get('NO_PROXY')
+        if not proxy:
+            os.environ.pop('HTTP_PROXY', None)
+            os.environ.pop('HTTPS_PROXY', None)
+            os.environ.pop('NO_PROXY', None)
+    if proxy:
+        if http_proxy:
+            os.environ['HTTP_PROXY'] = http_proxy
+        if https_proxy:
+            os.environ['HTTPS_PROXY'] = https_proxy
+        if no_proxy:
+            os.environ['NO_PROXY'] = no_proxy
 
 def gitclone(custom_nodes_path, url, target_hash=None, repo_path=None):
     repo_name = os.path.splitext(os.path.basename(url))[0]
@@ -86,28 +102,19 @@ def gitclone(custom_nodes_path, url, target_hash=None, repo_path=None):
         # url的https转换为http
         if url.startswith('https://'):
             url = url.replace('https://', 'http://')
-        url = url.replace('http://', f'http://{gitcache_http_proxy}/')
+        url = url.replace('http://', f'{gitcache_http_proxy}/')
         print(f"url: {url}")
         # Clone the repository from the remote URL
         while True:
             try:
-                # 将环境变量中的http_proxy和https_proxy存储在临时变量中
-                http_proxy = os.environ.get('http_proxy')
-                https_proxy = os.environ.get('https_proxy')
-                # 将环境变量中的http_proxy和https_proxy删除
-                os.environ.pop('http_proxy', None)
-                os.environ.pop('https_proxy', None)
+                proxy_switcher(False)
                 repo = git.Repo.clone_from(
                     url,
                     repo_path,
                     recursive=True,
                     progress=GitProgress()
                 )
-                # 将环境变量中的http_proxy和https_proxy恢复
-                if http_proxy is not None:
-                    os.environ['http_proxy'] = http_proxy
-                if https_proxy is not None:
-                    os.environ['https_proxy'] = https_proxy
+                proxy_switcher(True)
                 break
             except TimeoutError:
                 print("Retry git clone")
