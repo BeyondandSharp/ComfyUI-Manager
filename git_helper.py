@@ -86,6 +86,7 @@ def gitclone(custom_nodes_path, url, target_hash=None, repo_path=None):
         # url的https转换为http
         if url.startswith('https://'):
             url = url.replace('https://', 'http://')
+        url = url.replace('http://', f'http://{gitcache_http_proxy}/')
         print(f"url: {url}")
         # Clone the repository from the remote URL
         while True:
@@ -94,9 +95,7 @@ def gitclone(custom_nodes_path, url, target_hash=None, repo_path=None):
                     url,
                     repo_path,
                     recursive=True,
-                    progress=GitProgress(),
-                    allow_unsafe_options=True,
-                    multi_options=[f"--config http.proxy={gitcache_http_proxy}"]
+                    progress=GitProgress()
                 )
                 break
             except TimeoutError:
