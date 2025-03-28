@@ -91,12 +91,23 @@ def gitclone(custom_nodes_path, url, target_hash=None, repo_path=None):
         # Clone the repository from the remote URL
         while True:
             try:
+                # 将环境变量中的http_proxy和https_proxy存储在临时变量中
+                http_proxy = os.environ.get('http_proxy')
+                https_proxy = os.environ.get('https_proxy')
+                # 将环境变量中的http_proxy和https_proxy删除
+                os.environ.pop('http_proxy', None)
+                os.environ.pop('https_proxy', None)
                 repo = git.Repo.clone_from(
                     url,
                     repo_path,
                     recursive=True,
                     progress=GitProgress()
                 )
+                # 将环境变量中的http_proxy和https_proxy恢复
+                if http_proxy is not None:
+                    os.environ['http_proxy'] = http_proxy
+                if https_proxy is not None:
+                    os.environ['https_proxy'] = https_proxy
                 break
             except TimeoutError:
                 print("Retry git clone")
