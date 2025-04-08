@@ -716,17 +716,23 @@ export class ModelManager {
 		console.log("missing_models", missing_models);
 
 		const pathMap = {};
-		for(let k in models_pack) {
-			let item = models_pack[k];
-			const fullPath = item.save_path + '/' + item.filename;
-			//console.log("fullPath", fullPath);
-			if(missing_models.some(missing_model => fullPath.includes(missing_model))) {
-				pathMap[fullPath] = true;
-				//this.modelList中url与item.url一致的，属性Missing为true
-				const missingModel = this.modelList.find(model => model.url === item.url);
-				if(missingModel && missingModel.installed === "False") {
-					missingModel.installed = "Missing";
+		// 遍历missing_models，查找其元素是否在this.modelList中的save_path和filename的字符串组合中存在
+		for(const path of missing_models) {
+			//"\"转换为"/",去除两头空格，去除不可见字符，全转小写
+			let newPath = path.replace(/\\/g, "/").trim().replace(/\s+/g, "").toLowerCase();
+			console.log("newPath", newPath);
+
+			const missingModel = this.modelList.find(model => {
+				let fullpath = `${model.save_path}/${model.filename}`;
+				fullpath = fullpath.replace(/\\/g, "/").trim().replace(/\s+/g, "").toLowerCase();
+
+				if (fullpath.includes(newPath)) {
+					return true;
 				}
+			});
+
+			if(missingModel && missingModel.installed === "False") {
+				missingModel.installed = "Missing";
 			}
 		}
 		this.updateFilter();
