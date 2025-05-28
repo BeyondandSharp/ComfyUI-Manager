@@ -10,25 +10,6 @@ import { api } from "../../scripts/api.js";
 // https://cenfun.github.io/turbogrid/api.html
 import TG from "./turbogrid.esm.js";
 
-let modelExt = "ckpt|safetensors|pt|bin|pth|model|gguf";//Base
-modelExt += "|onnx";//ONNX
-modelExt += "|h5|hdf5|keras|pb|pbtxt";//Keras
-modelExt += "|engine";//TensorRT
-modelExt += "|mlmodel";//CoreML
-modelExt += "|predict_net.pb|predict_net.pbtxt|-symbol.json";//Caffe2
-modelExt += "|-symbol.json|params";//MXNet
-modelExt += "|tflite";//TensorFlow Lite
-modelExt += "|caffemodel|prototxt";//Caffe
-modelExt += "|pdparams";//PaddlePaddle
-modelExt += "|cntk";//CNTK
-modelExt += "|pkl|pickle";//PyTorch
-modelExt += "|t7|ts";//Torch
-modelExt += "|__model__";//PaddlePaddle
-modelExt += "|cfg";//Darknet
-modelExt += "|mlnet";//ML.NET
-modelExt += "|jit";//JIT
-console.log("modelExt", modelExt);
-
 loadCss("./model-manager.css");
 
 const gridId = "model";
@@ -58,7 +39,6 @@ const pageHtml = `
 		</svg>
 		Back
 	</button>
-	<button class="cmm-manager-check-missing">Check Missing</button>
 	<button class="cmm-manager-refresh">Refresh</button>
 	<button class="cmm-manager-stop">Stop</button>
 	<div class="cmm-flex-auto"></div>
@@ -108,9 +88,6 @@ export class ModelManager {
 		}, {
 			label: "In Workflow",
 			value: "in_workflow"
-		}, {
-			label: "Missing",
-			value: "Missing"
 		}];
 
 		this.typeList = [{
@@ -208,12 +185,6 @@ export class ModelManager {
 				    this.close()
 				    manager_instance.show();
 				}
-			},
-
-			".cmm-manager-check-missing": {
-				click: (e) => {
-					this.getMissingModels();
-				}
 			}
 		};
 		Object.keys(eventsMap).forEach(selector => {
@@ -285,8 +256,9 @@ export class ModelManager {
 			// updateGrid handler for filter and keywords
 			rowFilter: (rowItem) => {
 
-				const searchableColumns = ["name", "type", "base", "description", "filename", "save_path"];
-				const models_extensions = ['.ckpt', '.pt', '.pt2', '.bin', '.pth', '.safetensors', '.pkl', '.sft'];
+				const searchableColumns = ["name", "filename"];
+				const models_pattern = /.*\.ckpt|.*\.pt|.*\.pt2|.*\.bin|.*\.pth|.*\.safetensors|.*\.pkl|.*\.sft|.*\.onnx|svdq-int4.*/g;
+
 
 				let shouldShown = grid.highlightKeywordsFilter(rowItem, searchableColumns, this.keywords);
 
@@ -298,11 +270,13 @@ export class ModelManager {
 								app.graph._nodes.forEach((item, i) => {
 									if (Array.isArray(item.widgets_values)) {
 										item.widgets_values.forEach((_item, i) => {
-											if (rowItem.in_workflow === null && _item !== null && models_extensions.includes("." + _item.toString().split('.').pop())) {
-												let filename = _item.match(/([^\/]+)(?=\.\w+$)/)[0];
-												if (grid.highlightKeywordsFilter(rowItem, searchableColumns, filename)) {
-													rowItem.in_workflow = "True";
-													grid.highlightKeywordsFilter(rowItem, searchableColumns, "");
+											if (rowItem.in_workflow === null && _item !== null) {
+												const widgets_value = _item.toString().split(/\/|\\/).pop();
+												if( widgets_value !== null && widgets_value.match(models_pattern)) {
+													if (grid.highlightKeywordsFilter(rowItem, searchableColumns, widgets_value)) {
+														rowItem.in_workflow = "True";
+														grid.highlightKeywordsFilter(rowItem, searchableColumns, "");
+													}
 												}
 											}
 										});
@@ -664,104 +638,6 @@ export class ModelManager {
 		return models;
 	}
 
-	async getMissingModels() {
-		this.showLoading();
-		app.refreshComboInNodes();
-		this.filter = "Missing";
-		this.element.querySelector(".cmm-manager-filter").value = "Missing";
-		const mode = manager_instance.datasrc_combo.value;
-		this.showStatus(`Loading missing models (${mode}) ...`);
-		const res = await fetchData(`/externalmodel/getlist?mode=${mode}`);
-		if (res.error) {
-			this.showError(`Failed to get external model list: ${res.error}`);
-			return;
-		}
-
-		// build filename->url map
-		const models_pack = [];
-		for(let k in this.modelList) {
-			let model = this.modelList[k];
-
-			if(model.url) {
-				models_pack.push({
-					name: model.name,
-					save_path: model.save_path,
-					filename: model.filename,
-					url: model.url
-				});
-			}
-		}
-		
-		// 获取已存在的模型
-		const modelFolders = await api.getModelFolders();
-		let allModels = [];
-		for(const folderInfo of modelFolders) {
-			const models = await api.getModels(folderInfo.name);
-			allModels = allModels.concat(
-				models.map(model => ({
-					name: model.name,
-					folder: folderInfo.name
-				}))
-			);
-		}
-
-		const missing_models = [];
-		const workflow = app.graph.serialize();
-		const group_nodes = workflow.extra && workflow.extra.groupNodes ? workflow.extra.groupNodes : [];
-		let nodes = workflow.nodes;
-
-		for (let i in group_nodes) {
-			let group_node = group_nodes[i];
-			nodes = nodes.concat(group_node.nodes);
-		}
-
-		for (let i in nodes) {
-			const node_type = nodes[i].type;
-			if(node_type.startsWith('workflow/') || node_type.startsWith('workflow>') || node_type=='Note')
-				continue;
-
-			const widgets_values = nodes[i].widgets_values;
-			if(!widgets_values || widgets_values.length == 0)
-				continue;
-
-			//遍历widgets_values，先找本地有没有对应模型，没有的话再去库中查找模型
-			for (const widget of widgets_values) {
-				if(!widget || 
-					typeof widget !== 'string' || 
-					!(new RegExp(`\\.(${modelExt})$`, 'i')).test(widget) ||
-					allModels.some(model => model.name === widget)
-				)
-					continue;
-				missing_models.push(widget);
-			}
-		}
-		console.log("missing_models", missing_models);
-
-		const pathMap = {};
-		// 遍历missing_models，查找其元素是否在this.modelList中的save_path和filename的字符串组合中存在
-		for(const path of missing_models) {
-			//"\"转换为"/",去除两头空格，去除不可见字符，全转小写
-			let newPath = path.replace(/\\/g, "/").trim().replace(/\s+/g, "").toLowerCase();
-			console.log("newPath", newPath);
-
-			const missingModel = this.modelList.find(model => {
-				let fullpath = `${model.save_path}/${model.filename}`;
-				fullpath = fullpath.replace(/\\/g, "/").trim().replace(/\s+/g, "").toLowerCase();
-
-				if (fullpath.includes(newPath)) {
-					return true;
-				}
-			});
-
-			if(missingModel && missingModel.installed === "False") {
-				missingModel.installed = "Missing";
-			}
-		}
-		this.updateFilter();
-		this.updateGrid();
-		this.hideLoading();
-	}
-
 	// ===========================================================================================
 
 	async loadData() {
@@ -849,12 +725,10 @@ export class ModelManager {
 	}
 
 	showError(err) {
-		//console.log(`Error: ${err}`);
 		this.showMessage(err, "red");
 	}
 
 	showMessage(msg, color) {
-		//console.log(`Message: ${msg}`);
 		if (color) {
 			msg = `<font color="${color}">${msg}</font>`;
 		}
@@ -862,7 +736,6 @@ export class ModelManager {
 	}
 
 	showStatus(msg, color) {
-		//console.log(`Status: ${msg}`);
 		if (color) {
 			msg = `<font color="${color}">${msg}</font>`;
 		}
@@ -870,7 +743,7 @@ export class ModelManager {
 	}
 
 	showLoading() {
-		this.setDisabled(true);
+//		this.setDisabled(true);
 		if (this.grid) {
 			this.grid.showLoading();
 			this.grid.showMask({
@@ -880,7 +753,7 @@ export class ModelManager {
 	}
 
 	hideLoading() {
-		this.setDisabled(false);
+//		this.setDisabled(false);
 		if (this.grid) {
 			this.grid.hideLoading();
 			this.grid.hideMask();
