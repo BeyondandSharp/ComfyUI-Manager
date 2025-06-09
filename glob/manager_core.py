@@ -46,7 +46,7 @@ from node_package import InstalledNodePackage
 from packaging import version
 
 
-version_code = [3, 32, 3]
+version_code = [3, 32, 8]
 version_str = f"V{version_code[0]}.{version_code[1]}" + (f'.{version_code[2]}' if len(version_code) > 2 else '')
 
 
