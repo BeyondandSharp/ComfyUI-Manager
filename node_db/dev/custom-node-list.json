@@ -1,6 +1,106 @@
 {
     "custom_nodes": [
         {
+            "author": "WozStudios",
+            "title": "ComfyUI-WozNodes",
+            "reference": "https://github.com/WozStudios/ComfyUI-WozNodes",
+            "files": [
+                "https://github.com/WozStudios/ComfyUI-WozNodes"
+            ],
+            "install_type": "git-clone",
+            "description": "NODES: Trim Image Batch, Create Image Batch, Select Image Batch by Mask"
+        },
+        {
+            "author": "DDDDEEP",
+            "title": "ComfyUI-DDDDEEP",
+            "reference": "https://github.com/DDDDEEP/ComfyUI-DDDDEEP",
+            "files": [
+                "https://github.com/DDDDEEP/ComfyUI-DDDDEEP"
+            ],
+            "install_type": "git-clone",
+            "description": "NODES: AutoWidthHeight, ReturnIntSeed, OppositeBool, PromptItemCollection"
+        },
+        {
+            "author": "stalkervr",
+            "title": "comfyui-custom-path-nodes [UNSAFE]",
+            "reference": "https://github.com/stalkervr/comfyui-custom-path-nodes",
+            "files": [
+                "https://github.com/stalkervr/comfyui-custom-path-nodes"
+            ],
+            "install_type": "git-clone",
+            "description": "Nodes for path handling and image cropping.[w/This nodepack has a vulnerability that allows remote access to arbitrary file paths.]"
+        },
+        {
+            "author": "vovler",
+            "title": "comfyui-vovlertools",
+            "reference": "https://github.com/vovler/ComfyUI-vovlerTools",
+            "files": [
+                "https://github.com/vovler/ComfyUI-vovlerTools"
+            ],
+            "install_type": "git-clone",
+            "description": "Advanced ComfyUI nodes for WD14 tagging, image filtering, and CLIP to TensorRT conversion"
+        },
+        {
+            "author": "ELiZswe",
+            "title": "ComfyUI-ELiZTools",
+            "reference": "https://github.com/ELiZswe/ComfyUI-ELiZTools",
+            "files": [
+                "https://github.com/ELiZswe/ComfyUI-ELiZTools"
+            ],
+            "install_type": "git-clone",
+            "description": "ELIZ Tools"
+        },
+        {
+            "author": "yamanacn",
+            "title": "comfyui_qwenbbox",
+            "reference": "https://github.com/yamanacn/comfyui_qwenbbox",
+            "files": [
+                "https://github.com/yamanacn/comfyui_qwenbbox"
+            ],
+            "install_type": "git-clone",
+            "description": "NODES: Load Qwen Model (v2), Qwen Bbox Detection, Prepare BBox for SAM (v2)"
+        },
+        {
+            "author": "mikheys",
+            "title": "ComfyUI-mikheys",
+            "reference": "https://github.com/mikheys/ComfyUI-mikheys",
+            "files": [
+                "https://github.com/mikheys/ComfyUI-mikheys"
+            ],
+            "install_type": "git-clone",
+            "description": "NODES: WAN Optimal Resolution Selector, WAN Show Image Dimensions"
+        },
+        {
+            "author": "iacoposk8",
+            "title": "ComfyUI XOR Pickle Nodes",
+            "reference": "https://github.com/iacoposk8/xor_pickle_nodes",
+            "files": [
+                "https://github.com/iacoposk8/xor_pickle_nodes"
+            ],
+            "install_type": "git-clone",
+            "description": "Two custom nodes for ComfyUI that allow you to encrypt and decrypt Python objects using simple XOR encryption with pickle."
+        },
+        {
+            "author": "Aryan185",
+            "title": "ComfyUI-ReplicateFluxKontext",
+            "reference": "https://github.com/Aryan185/ComfyUI-ReplicateFluxKontext",
+            "files": [
+                "https://github.com/Aryan185/ComfyUI-ReplicateFluxKontext"
+            ],
+            "install_type": "git-clone",
+            "description": "ComfyUI node for Flux Kontext Pro and Max models from Replicate"
+        },
+        {
+            "author": "yamanacn",
+            "title": "comfyui_qwen_object [WIP]",
+            "reference": "https://github.com/yamanacn/comfyui_qwen_object",
+            "files": [
+                "https://github.com/yamanacn/comfyui_qwen_object"
+            ],
+            "install_type": "git-clone",
+            "description": "This is a custom node for ComfyUI that integrates the Qwen vision model for tasks such as object detection.\nNOTE: The files in the repo are not organized."
+        },
+        {
             "author": "neverbiasu",
             "title": "ComfyUI-Show-o [WIP]",
             "reference": "https://github.com/neverbiasu/ComfyUI-Show-o",
@@ -49,16 +149,6 @@
             ],
             "install_type": "git-clone",
             "description": "These nodes allow you to configure LLM API connections, send images with custom prompts, and convert the LLM's JSON bounding box responses into a format compatible with segmentation nodes like SAM2\nNOTE: The files in the repo are not organized."
-        },
-        {
-            "author": "bento234",
-            "title": "ComfyUI-bento-toolbox",
-            "reference": "https://github.com/bento234/ComfyUI-bento-toolbox",
-            "files": [
-                "https://github.com/bento234/ComfyUI-bento-toolbox"
-            ],
-            "install_type": "git-clone",
-            "description": "NODES: Tile Prompt Distributor"
         },
         {
             "author": "LucianGnn",
@@ -123,9 +213,9 @@
         {
             "author": "bleash-dev",
             "title": "Comfyui-Iddle-Checker",
-            "reference": "https://github.com/bleash-dev/Comfyui-Iddle-Checker",
+            "reference": "https://github.com/bleash-dev/Comfyui-Idle-Checker",
             "files": [
-                "https://github.com/bleash-dev/Comfyui-Iddle-Checker"
+                "https://github.com/bleash-dev/Comfyui-Idle-Checker"
             ],
             "install_type": "git-clone",
             "description": "front extension for idle checker"
@@ -1079,16 +1169,6 @@
             ],
             "install_type": "git-clone",
             "description": "Compare and save unique workflows, count tokens in prompt, and other utility."
-        },
-        {
-            "author": "Maxed-Out-99",
-            "title": "ComfyUI-MaxedOut",
-            "reference": "https://github.com/Maxed-Out-99/ComfyUI-MaxedOut",
-            "files": [
-                "https://github.com/Maxed-Out-99/ComfyUI-MaxedOut"
-            ],
-            "install_type": "git-clone",
-            "description": "Custom ComfyUI nodes used in Maxed Out workflows (SDXL, Flux, etc.)"
         },
         {
             "author": "VictorLopes643",
@@ -2130,16 +2210,6 @@
             ],
             "install_type": "git-clone",
             "description": "A lightweight node pack for ComfyUI that adds a few handy nodes that I use in my workflows"
-        },
-        {
-            "author": "markuryy",
-            "title": "ComfyUI Spiritparticle Nodes [WIP]",
-            "reference": "https://github.com/markuryy/comfyui-spiritparticle",
-            "files": [
-                "https://github.com/markuryy/comfyui-spiritparticle"
-            ],
-            "install_type": "git-clone",
-            "description": "A node pack by spiritparticle."
         },
         {
             "author": "CeeVeeR",
