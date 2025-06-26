@@ -72,22 +72,6 @@ class GitProgress(RemoteProgress):
         self.pbar.pos = 0
         self.pbar.refresh()
 
-def proxy_switcher(proxy:bool = False):
-    if os.environ.get('HTTP_PROXY') or os.environ.get('HTTPS_PROXY') or os.environ.get('NO_PROXY'):
-        http_proxy = os.environ.get('HTTP_PROXY')
-        https_proxy = os.environ.get('HTTPS_PROXY')
-        no_proxy = os.environ.get('NO_PROXY')
-        if not proxy:
-            os.environ.pop('HTTP_PROXY', None)
-            os.environ.pop('HTTPS_PROXY', None)
-            os.environ.pop('NO_PROXY', None)
-    if proxy:
-        if http_proxy:
-            os.environ['HTTP_PROXY'] = http_proxy
-        if https_proxy:
-            os.environ['HTTPS_PROXY'] = https_proxy
-        if no_proxy:
-            os.environ['NO_PROXY'] = no_proxy
 
 def gitclone(custom_nodes_path, url, target_hash=None, repo_path=None):
     repo_name = os.path.splitext(os.path.basename(url))[0]
@@ -95,42 +79,18 @@ def gitclone(custom_nodes_path, url, target_hash=None, repo_path=None):
     if repo_path is None:
         repo_path = os.path.join(custom_nodes_path, repo_name)
 
-    # 如果url开头是https://github.com或http://github.com，则使用代理
-    if url.startswith('https://github.com') or url.startswith('http://github.com'):
-        gitcache_http_proxy = os.environ.get('GITCACHE_HTTP_PROXY')
-        print(f"gitcache_proxy: {gitcache_http_proxy}")
-        # url的https转换为http
-        if url.startswith('https://'):
-            url = url.replace('https://', 'http://')
-        url = url.replace('http://', f'{gitcache_http_proxy}/')
-        print(f"url: {url}")
-        # Clone the repository from the remote URL
-        while True:
-            try:
-                proxy_switcher(False)
-                repo = git.Repo.clone_from(
-                    url,
-                    repo_path,
-                    recursive=True,
-                    progress=GitProgress()
-                )
-                proxy_switcher(True)
-                break
-            except TimeoutError:
-                print("Retry git clone")
-    else:
-        # Clone the repository from the remote URL
-        while True:
-            try:
-                repo = git.Repo.clone_from(
-                    url,
-                    repo_path,
-                    recursive=True,
-                    progress=GitProgress()
-                )
-                break
-            except TimeoutError:
-                print("重新开始克隆任务...")
+    # Clone the repository from the remote URL
+    while True:
+        try:
+            repo = git.Repo.clone_from(
+                url,
+                repo_path,
+                recursive=True,
+                progress=GitProgress()
+            )
+            break
+        except TimeoutError:
+            print("重新开始克隆任务...")
 
     if target_hash is not None:
         print(f"CHECKOUT: {repo_name} [{target_hash}]")
