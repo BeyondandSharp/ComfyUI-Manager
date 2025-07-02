@@ -579,9 +579,11 @@ async def task_worker():
 
                         if res:
                             return 'success'
-                    # 如果model_url没有://或不是file://开头，则直接复制到model_dir
+                    # 如果model_url没有://，则直接复制到model_dir
                     elif not "://" in model_url:
                         model_dir = get_model_dir(json_data, True)
+                        # 确保目标目录存在
+                        os.makedirs(model_dir, exist_ok=True)
                         file_local = os.path.join(model_dir, json_data['filename'])
                         print('copy', model_url, 'to', file_local)
                         try:
