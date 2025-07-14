@@ -46,7 +46,7 @@ from node_package import InstalledNodePackage
 from packaging import version
 
 
-version_code = [3, 33, 3]
+version_code = [3, 34]
 version_str = f"V{version_code[0]}.{version_code[1]}" + (f'.{version_code[2]}' if len(version_code) > 2 else '')
 
 
@@ -1741,12 +1741,15 @@ def read_config():
                }
 
     except Exception:
-        manager_util.use_uv = False
+        import importlib.util
+        # temporary disable `uv` on Windows by default (https://github.com/Comfy-Org/ComfyUI-Manager/issues/1969)
+        manager_util.use_uv = importlib.util.find_spec("uv") is not None and platform.system() != "Windows"
+        
         return {
             'http_channel_enabled': False,
             'preview_method': manager_funcs.get_current_preview_method(),
             'git_exe': '',
-            'use_uv': False,
+            'use_uv': manager_util.use_uv,
             'channel_url': DEFAULT_CHANNEL,
             'default_cache_as_channel_url': False,
             'share_option': 'all',
