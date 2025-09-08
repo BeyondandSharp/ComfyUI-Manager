@@ -1487,6 +1487,7 @@ class UnifiedManager:
                 return ManagedResult('skip')
             elif self.is_disabled(node_id):
                 return self.unified_enable(node_id)
+
             else:
                 version_spec = self.resolve_unspecified_version(node_id)
 
